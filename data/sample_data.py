@@ -1,42 +1,39 @@
 import pandas as pd
 
-def load_regulations():
-    data = [
-        {
-            "Regulation": "EEXI",
-            "Effective Date": pd.to_datetime("2023-01-01"),
-            "Target": 30,
-            "Metric": "% Reduction",
-            "Description": "Energy Efficiency Existing Ship Index aimed at reducing fuel consumption and greenhouse gas emissions.",
-            "Region": "International",
-            "Status": "Implemented"
-        },
-        {
-            "Regulation": "CII",
-            "Effective Date": pd.to_datetime("2024-01-01"),
-            "Target": 20,
-            "Metric": "Rating",
-            "Description": "Carbon Intensity Indicator used to assess and rate vessel efficiency on a yearly basis.",
-            "Region": "International",
-            "Status": "Phased Implementation"
-        },
-        {
-            "Regulation": "EU ETS",
-            "Effective Date": pd.to_datetime("2024-06-01"),
-            "Target": 40,
-            "Metric": "€/tonne",
-            "Description": "European Union Emissions Trading System designed to incentivize emission reductions through a cap-and-trade system.",
-            "Region": "Europe",
-            "Status": "Operational"
-        },
-        {
-            "Regulation": "FuelEU Maritime",
-            "Effective Date": pd.to_datetime("2025-01-01"),
-            "Target": 50,
-            "Metric": "% Renewable",
-            "Description": "Regulation to increase the share of renewable energy in maritime fuels, supporting the EU's sustainability goals.",
-            "Region": "Europe",
-            "Status": "Proposed"
-        }
-    ]
-    return pd.DataFrame(data)
+def load_regulations(filepath="data/regulations.csv"):
+    """
+    Load and clean maritime regulations data from a CSV file.
+
+    The CSV file is expected to include columns such as:
+    "ID", "Applicable?", "FULL_NAME", "HYPERLINK_SS", "NAME", "Organization", 
+    "Impact", "Area", "Status", "In Effect", "Organization Type", "Applicable GT",
+    "Base Year", "Hyperlink 1", "Hyperlink 2", "Contact Email", "Contact Phone",
+    and various ship type columns (e.g., "RORO_SHIPS", "CONTAINER_SHIP", etc.).
+
+    Parameters:
+        filepath (str): Path to the CSV file containing regulations data.
+
+    Returns:
+        pd.DataFrame: A cleaned DataFrame with proper data types.
+    """
+    # Read CSV file into DataFrame
+    df = pd.read_csv(filepath)
+    
+    # Convert 'Effective Date' to datetime
+    if "Effective Date" in df.columns:
+        df["Effective Date"] = pd.to_datetime(df["Effective Date"], errors="coerce")
+    
+    # Convert 'Applicable?' column to boolean (if present)
+    if "Applicable?" in df.columns:
+        df["Applicable?"] = df["Applicable?"].astype(str).str.strip().str.upper().map({"TRUE": True, "FALSE": False})
+    
+    # Convert columns that should be numeric (remove commas if necessary)
+    numeric_cols = ["CO2 Limit (g/kWh)", "NOx Limit (g/kWh)", "Applicable GT", "Base Year"]
+    for col in numeric_cols:
+        if col in df.columns:
+            # Remove commas and convert to numeric values, coercing errors to NaN
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce')
+    
+    # (Optional) Further cleaning could be done for phone numbers, hyperlinks, etc.
+    
+    return df
