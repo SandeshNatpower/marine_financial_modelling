@@ -24,7 +24,7 @@ from pages.output_module import (
 
 # Import helper functions and global data from the power_profiles page
 from pages import power_profiles
-
+"""        
 ###########################################################################
 # wkhtmltopdf Configuration for pdfkit
 ###########################################################################
@@ -32,6 +32,7 @@ from pages import power_profiles
 WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
 
+"""
 ###########################################################################
 # API CALL HELPER FUNCTION
 ###########################################################################
