@@ -1,11 +1,6 @@
 # Use a stable Python version
 FROM python:3.10-slim
 
-# Install wkhtmltopdf and any dependencies
-RUN apt-get update && apt-get install -y \
-    wkhtmltopdf \
-    && rm -rf /var/lib/apt/lists/*
-
 # Set the working directory inside the container
 WORKDIR /app
 
