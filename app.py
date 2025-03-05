@@ -58,7 +58,7 @@ def get_sidebar():
                         href="/power-profiles", active="exact", style=link_style),
             dbc.NavLink([html.I(className="fas fa-chart-bar me-2"), " Reporting"],
                         href="/reporting", active="exact", style=link_style),
-            dbc.NavLink([html.I(className="fas fa-database me-2"), " Database"],
+            dbc.NavLink([html.I(className="fas fa-database me-2"), " Reference Data Table"],
                         href="/database", active="exact", style=link_style),
         ],
         vertical=True,
