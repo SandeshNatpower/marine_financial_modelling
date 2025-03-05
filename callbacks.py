@@ -583,4 +583,3 @@ def register_callbacks(app):
                 }
             }
         return fig
-
