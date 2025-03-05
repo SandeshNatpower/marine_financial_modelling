@@ -29,6 +29,7 @@ from pages import power_profiles
 # wkhtmltopdf Configuration for pdfkit
 ###########################################################################
 # Update this path to point to your wkhtmltopdf executable
+WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
 
 ###########################################################################
