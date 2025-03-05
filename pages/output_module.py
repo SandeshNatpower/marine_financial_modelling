@@ -171,12 +171,14 @@ def get_current_output_table(api_data):
 def get_future_output_table(api_data):
     future = api_data.get("future_output_table", {})
     
+    # SFC Data (using updated key for average SFC)
     sfc_data = (future.get("average_sfc") or [{}])[0]
     sailing_sfc = sfc_data.get("sailing_avg_sfc", 191)
     working_sfc = sfc_data.get("working_avg_sfc", 221)
     idle_sfc    = sfc_data.get("idle_avg_sfc", 202)
     avg_sfc     = sfc_data.get("avg_shore_sfc_day", 0)
     
+    # Engine Power Data (using future power requirement key)
     eng_data = (future.get("enginge_power") or [{}])[0]
     sailing_power = eng_data.get("sailing_power", 19200)
     working_power = eng_data.get("working_power", 11520)
@@ -184,12 +186,14 @@ def get_future_output_table(api_data):
     max_power     = eng_data.get("max_power_day", 19200)
     avg_power     = eng_data.get("avg_shore_power_req_day", 0)
     
+    # Energy Requirement Data
     power_day = (future.get("power_calc_day") or [{}])[0]
     sailing_energy = power_day.get("sailing_eneregy_req_kwh_day", 460800)
     working_energy = power_day.get("working_eneregy_req_kwh_day", 276480)
     shore_energy   = power_day.get("shore_eneregy_req_kwh_day", 0)
     avg_energy     = power_day.get("power_req_day", 288142)
     
+    # Fuel Consumption Data
     kg_data = (future.get("fuel_consumption_kg") or [{}])[0]
     sailing_fuel_kg = kg_data.get("sailing_fuel_consumption_kg", 87889)
     working_fuel_kg = kg_data.get("working_fuel_consumption_kg", 61033)
