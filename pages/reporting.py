@@ -106,17 +106,7 @@ def layout():
                         dbc.Col([
                             dbc.Button("Generate PDF Report", id="generate-report-button",
                                        color="primary", className="me-2")
-                        ], md=3, xs=12),
-                        dbc.Col([
-                            dbc.Label("Email Address", style={"color": TEXT_COLOR}),
-                            dbc.Input(
-                                id="report-email",
-                                type="email",
-                                placeholder="e.g. example@domain.com"
-                            ),
-                            dbc.Button("Send Email", id="send-email-button",
-                                       color="info", className="mt-2")
-                        ], md=9, xs=12),
+                        ], xs=12),
                     ]),
                     
                     html.Div(id="report-status", className="mt-3", style={"color": TEXT_COLOR}),
