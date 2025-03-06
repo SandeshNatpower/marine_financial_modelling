@@ -1,16 +1,12 @@
-# import pdfkit
-import smtplib
-import ssl
-from email.message import EmailMessage
-
-from dash import Input, Output, State, html, no_update, dcc
+import json
+import requests
+from urllib.parse import urlencode
+from dash import html, dcc, no_update, Input, Output, State
 import dash_bootstrap_components as dbc
 import config
-from urllib.parse import urlencode
-import requests
 import plotly.graph_objects as go
 
-# Import helper functions from the output module
+# Import helper functions from output_module and power_profiles
 from pages.output_module import (
     get_current_output_table,
     get_future_output_table,
@@ -21,8 +17,6 @@ from pages.output_module import (
     style_savings,
     format_number
 )
-
-# Import helper functions and global data from the power_profiles page
 from pages import power_profiles
 
 ###########################################################################
@@ -35,23 +29,23 @@ def get_financial_data(params):
         "sailing_engine_load": 0.5,
         "working_engine_load": 0.3,
         "shore_engine_load": 0.395,
-        "sailing_days": 175,
-        "working_days": 160,
-        "idle_days": 0,
-        "shore_days": 70,
+        "sailing_days": 199,
+        "working_days": 40,
+        "idle_days": 126,
+        "shore_days": 0,
         "shore_port": 1,
         "main_fuel_type": "MDO",
         "aux_fuel_type": "MDO",
-        "future_main_fuel_type": "MDO",
-        "future_aux_fuel_type": "MDO",
+        "future_main_fuel_type": "Diesel-Bio-diesel",
+        "future_aux_fuel_type": "Diesel-Bio-diesel",
         "reporting_year": 2030,
         "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
         "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
-        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 0,
-        "FUELEU_CURRENT_PENALTY_PER_YEAR": 919412.47,
+        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
+        "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,
         "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,
-        "PARASITIC_LOAD_ENGINE": 0.96,
-        "BIOFUELS_BLEND_PERCENTAGE": 0,
+        "PARASITIC_LOAD_ENGINE": 0.95,
+        "BIOFUELS_BLEND_PERCENTAGE": 0.3,
         "shore_enable": False
     }
     default_params.update(params)
@@ -84,7 +78,6 @@ def register_callbacks(app):
     def search_vessel_callback(n_clicks, search_type, search_term):
         if not search_term:
             return "Please enter a search term.", config.DEFAULT_VESSEL
-        # Import the input module's get_vessel_details to avoid circular imports
         from pages.input_module import get_vessel_details as input_get_vessel_details
         vessel_data = input_get_vessel_details(search_term, search_type)
         return f"Found vessel: {vessel_data.get('vessel_name', 'Unknown')}", vessel_data
@@ -172,10 +165,8 @@ def register_callbacks(app):
         )
 
     @app.callback(
-        [
-            Output('emissions-data-store', 'data'),
-            Output('tab-switch', 'data')
-        ],
+        [Output('emissions-data-store', 'data'),
+         Output('tab-switch', 'data')],
         Input('calculate-button', 'n_clicks'),
         [
             State('main-power', 'value'),
@@ -212,9 +203,7 @@ def register_callbacks(app):
         fueleu_future_penalty, parasitic_load, biofuels_blend, shore_enable,
         vessel_data
     ):
-        if n_clicks is None:
-            return None, "input"
-        if not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
+        if n_clicks is None or not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
             return None, "input"
         shore_port = vessel_data.get('shore_port', 1) if isinstance(vessel_data, dict) else 1
         reporting_year = vessel_data.get('reporting_year', 2030) if isinstance(vessel_data, dict) else 2030
@@ -318,7 +307,7 @@ def register_callbacks(app):
             
             fig = go.Figure()
             
-            # Add alternating shaded background for each year range
+            # Alternating shaded background
             for i, year in enumerate(filtered_years[:-1]):
                 if i % 2 == 0:
                     fig.add_shape(
@@ -363,7 +352,6 @@ def register_callbacks(app):
                         textfont=dict(size=10)
                     ))
                     
-                    # Annotate significant changes (>20%)
                     for i in range(1, len(filtered_values)):
                         change = filtered_values[i] - filtered_values[i-1]
                         percent_change = (change / filtered_values[i-1] * 100) if filtered_values[i-1] != 0 else 0
@@ -420,7 +408,6 @@ def register_callbacks(app):
                 height=600
             )
             
-            # Add watermark annotation
             fig.add_annotation(
                 text="Financial Analysis Dashboard",
                 x=1,
@@ -481,7 +468,6 @@ def register_callbacks(app):
     def update_energy_demand_chart(peak_power, base_load, storage_options):
         try:
             years_demo = list(range(2025, 2051))
-            # Simple energy demand model with 2% annual growth
             energy_demand = [peak_power * (base_load / 100) * (1 + 0.02*(y - 2025)) for y in years_demo]
     
             fig = go.Figure(data=go.Scatter(x=years_demo, y=energy_demand, mode='lines+markers'))
@@ -554,7 +540,6 @@ def register_callbacks(app):
     def update_totex_chart(_):
         try:
             fig = go.Figure()
-            # Format values as currency strings
             totex_text = [f"£{val:,.0f}" for val in power_profiles.totex_values]
             fig.add_trace(go.Bar(
                 x=power_profiles.totex_values,
@@ -583,3 +568,14 @@ def register_callbacks(app):
                 }
             }
         return fig
+
+    # AUTOMATIC REDIRECT CALLBACK
+    @app.callback(
+        Output("url", "pathname"),
+        Input("tab-switch", "data"),
+        prevent_initial_call=True
+    )
+    def redirect_to_output(tab):
+        if tab == "output":
+            return "/output"
+        return no_update

@@ -47,7 +47,7 @@ def get_current_output_table(api_data):
     idle_sfc    = sfc_data.get("idle_avg_sfc", 202)
     avg_sfc     = sfc_data.get("avg_sfc_day", 198)
     
-    # Emissions Data
+    # Emissions Data (CO2 TTW)
     co2_data  = (current.get("co2_emission_ttw") or [{}])[0]
     sailing_co2_ttw = co2_data.get("sailing_co2_emission_ttw", 286088)
     working_co2_ttw = co2_data.get("working_co2_emission_ttw", 198669)
@@ -82,6 +82,7 @@ def get_current_output_table(api_data):
     idle_fuel_l    = fuel_data.get("idle_fuel_consumption_liter", 4336)
     avg_fuel_l     = fuel_data.get("avg_fuel_consumption_liter_day", 62853)
     
+    # Example static engine hours
     engine_hours = {
         "sailing": 24,
         "working": 24,
@@ -171,14 +172,14 @@ def get_current_output_table(api_data):
 def get_future_output_table(api_data):
     future = api_data.get("future_output_table", {})
     
-    # SFC Data (using updated key for average SFC)
+    # SFC Data
     sfc_data = (future.get("average_sfc") or [{}])[0]
     sailing_sfc = sfc_data.get("sailing_avg_sfc", 191)
     working_sfc = sfc_data.get("working_avg_sfc", 221)
     idle_sfc    = sfc_data.get("idle_avg_sfc", 202)
     avg_sfc     = sfc_data.get("avg_shore_sfc_day", 0)
     
-    # Engine Power Data (using future power requirement key)
+    # Engine Power Data
     eng_data = (future.get("enginge_power") or [{}])[0]
     sailing_power = eng_data.get("sailing_power", 19200)
     working_power = eng_data.get("working_power", 11520)
@@ -269,81 +270,63 @@ def get_future_output_table(api_data):
     return html.Div(table, className="table-responsive")
 
 def get_opex_comparison_table(api_data, currency, conv_factor):
-    current_costs = (api_data.get("current_table", {}).get("costs") or [{}])[0]
-    future_costs = (api_data.get("future_output_table", {}).get("costs") or [{}])[0]
-
+    # Read the OPEX savings values directly from the API response
+    opex = api_data.get("opex_table", {})
+    savings = (opex.get("Savings") or [{}])[0]
+    savings_perc = (opex.get("Savings_perc") or [{}])[0]
+    
+    # Use the values provided by the API
+    fuel_eu = savings.get("savings_fuel_eu", 0)
+    fuel_price = savings.get("savings_fuel_price", 0)
+    maintenance = savings.get("savings_maintenance_cost", 0)
+    spare = savings.get("savings_spare_cost", 0)
+    
+    perc_fuel = savings_perc.get("perc_savings_fuel_eu", 0)
+    perc_fuel_price = savings_perc.get("perc_savings_fuel_price", 0)
+    perc_maint = savings_perc.get("perc_savings_maintenance_cost", 0)
+    perc_spare = savings_perc.get("perc_savings_spare_cost", 0)
+    
+    # Get currency formatting details
     currency_symbol = get_currency_symbol(currency)
-
-    current_fuel = current_costs.get("avg_fueleu_day", 1999)
-    current_maint = current_costs.get("engine_maintenance_costs", 480)
-    current_spares = current_costs.get("spares_consumables_costs", 48)
-    current_total = current_fuel + current_maint + current_spares
-
-    future_fuel = future_costs.get("future_avg_fueleu_day", 0)
-    future_maint = future_costs.get("future_avg_engine_maintenance_costs_day", 480)
-    future_spares = future_costs.get("future_avg_spares_consumables_costs_day", 72)
-    future_total = future_fuel + future_maint + future_spares
-
-    fuel_savings = current_fuel - future_fuel
-    maint_savings = current_maint - future_maint
-    spares_savings = current_spares - future_spares
-    total_savings = current_total - future_total
-
-    current_fuel_fmt = format_currency_value(current_fuel, currency, conv_factor)
-    current_maint_fmt = format_currency_value(current_maint, currency, conv_factor)
-    current_spares_fmt = format_currency_value(current_spares, currency, conv_factor)
-    current_total_fmt = format_currency_value(current_total, currency, conv_factor)
-
-    future_fuel_fmt = format_currency_value(future_fuel, currency, conv_factor)
-    future_maint_fmt = format_currency_value(future_maint, currency, conv_factor)
-    future_spares_fmt = format_currency_value(future_spares, currency, conv_factor)
-    future_total_fmt = format_currency_value(future_total, currency, conv_factor)
-
-    fuel_savings_fmt = format_currency_value(fuel_savings, currency, conv_factor)
-    maint_savings_fmt = format_currency_value(maint_savings, currency, conv_factor)
-    spares_savings_fmt = format_currency_value(spares_savings, currency, conv_factor)
-    total_savings_fmt = format_currency_value(total_savings, currency, conv_factor)
-
-    fuel_savings_style = style_savings(fuel_savings)
-    maint_savings_style = style_savings(maint_savings)
-    spares_savings_style = style_savings(spares_savings)
-    total_savings_style = style_savings(total_savings)
-
+    
+    # Format the values using helper functions
+    fuel_eu_fmt = format_currency_value(fuel_eu, currency, conv_factor)
+    fuel_price_fmt = format_currency_value(fuel_price, currency, conv_factor)
+    maintenance_fmt = format_currency_value(maintenance, currency, conv_factor)
+    spare_fmt = format_currency_value(spare, currency, conv_factor)
+    
     table = dbc.Table([
         html.Thead(html.Tr([
             html.Th("Metric"),
-            html.Th(f"Current ({currency_symbol})"),
-            html.Th(f"Future ({currency_symbol})"),
-            html.Th(f"Savings ({currency_symbol})")
+            html.Th(f"Savings ({currency_symbol})"),
+            html.Th("Savings (%)")
         ]), style={"backgroundColor": "#0A4B8C", "color": "white"}),
         html.Tbody([
             html.Tr([
-                html.Td("Fuel Cost"),
-                html.Td(current_fuel_fmt),
-                html.Td(future_fuel_fmt),
-                html.Td(fuel_savings_fmt, className=fuel_savings_style)
+                html.Td("Fuel EU"),
+                html.Td(fuel_eu_fmt, className=style_savings(fuel_eu)),
+                html.Td(f"{perc_fuel:.1f}%", className=style_savings(perc_fuel))
+            ]),
+            html.Tr([
+                html.Td("Fuel Price"),
+                html.Td(fuel_price_fmt, className=style_savings(fuel_price)),
+                html.Td(f"{perc_fuel_price:.1f}%", className=style_savings(perc_fuel_price))
             ]),
             html.Tr([
                 html.Td("Maintenance Cost"),
-                html.Td(current_maint_fmt),
-                html.Td(future_maint_fmt),
-                html.Td(maint_savings_fmt, className=maint_savings_style)
+                html.Td(maintenance_fmt, className=style_savings(maintenance)),
+                html.Td(f"{perc_maint:.1f}%", className=style_savings(perc_maint))
             ]),
             html.Tr([
-                html.Td("Spares & Consumables"),
-                html.Td(current_spares_fmt),
-                html.Td(future_spares_fmt),
-                html.Td(spares_savings_fmt, className=spares_savings_style)
-            ]),
-            html.Tr([
-                html.Td("Total OPEX", className="fw-bold"),
-                html.Td(current_total_fmt, className="fw-bold"),
-                html.Td(future_total_fmt, className="fw-bold"),
-                html.Td(total_savings_fmt, className=total_savings_style)
+                html.Td("Spare Cost"),
+                html.Td(spare_fmt, className=style_savings(spare)),
+                html.Td(f"{perc_spare:.1f}%", className=style_savings(perc_spare))
             ]),
         ]),
     ], bordered=True, striped=True, hover=True)
+    
     return html.Div(table, className="table-responsive")
+
 
 def get_emissions_comparison_table(api_data):
     savings_data = (api_data.get("emissions_table", {}).get("Savings") or [{}])[0]
@@ -356,7 +339,7 @@ def get_emissions_comparison_table(api_data):
     pm = savings_data.get("savings_avg_pm_ttw", 15)
     sox = savings_data.get("savings_avg_sox_ttw", 35)
 
-    perc_ch4 = savings_perc_data.get("perc_savings_avg_ch4_ttw", 0)
+    perc_ch4 = savings_perc_data.get("savings_avg_ch4_ttw", 0)
     perc_co2_ttw = savings_perc_data.get("perc_savings_avg_co2_ttw", 30)
     perc_co2_wtw = savings_perc_data.get("perc_savings_avg_co2_wtw", 29)
     perc_nox = savings_perc_data.get("perc_savings_avg_nox_ttw", 30)

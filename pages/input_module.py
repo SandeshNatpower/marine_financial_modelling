@@ -3,16 +3,14 @@ import requests
 from urllib.parse import urlencode
 from dash import html, dcc
 import dash_bootstrap_components as dbc
-
-# Import configuration
 import config
 
 ###############################################################################
 # GLOBAL CONSTANTS AND DEFAULTS
 ###############################################################################
-PRIMARY_COLOR = "#0A4B8C"  # Updated to deep navy
+PRIMARY_COLOR = "#0A4B8C"  
 TEXT_COLOR = "#212121"
-FUEL_OPTIONS = config.FUEL_OPTIONS  # Consider adding 'Diesel-Bio-diesel' if needed
+FUEL_OPTIONS = config.FUEL_OPTIONS
 
 # Default vessel details (fallback if API call fails)
 DEFAULT_VESSEL = config.DEFAULT_VESSEL
@@ -21,10 +19,8 @@ DEFAULT_VESSEL = config.DEFAULT_VESSEL
 # HELPER FOR CREATING INPUT GROUPS
 ###############################################################################
 def create_input_group(label, id, value=None, input_type='number', options=None, col_size=4, editable=True):
-    # Define responsive column settings: md for medium devices, xs for extra small devices
     col_settings = {"md": col_size, "xs": 12}
     if input_type == 'dropdown':
-        # Ensure options are in the proper dictionary format
         if options and isinstance(options[0], dict):
             opts = options
         elif options:
@@ -198,22 +194,18 @@ def layout():
                 style={"backgroundColor": PRIMARY_COLOR}
             ),
             dbc.CardBody([
-                # Future Fuel Types
                 dbc.Row([
                     create_input_group("Future Main Fuel Type", "future-main-fuel-type", DEFAULT_VESSEL.get("future_main_fuel_type", "Diesel-Bio-diesel"), 'dropdown', options=FUEL_OPTIONS, col_size=4),
                     create_input_group("Future Aux Fuel Type", "future-aux-fuel-type", DEFAULT_VESSEL.get("future_aux_fuel_type", "Diesel-Bio-diesel"), 'dropdown', options=FUEL_OPTIONS, col_size=4)
                 ], className="mb-3"),
-                # Future Penalties and Biofuels Costs
                 dbc.Row([
                     create_input_group("FUELEU Future Penalty (EUR/yr)", "fueleu-future-penalty", DEFAULT_VESSEL.get("FUELEU_FUTURE_PENALTY_PER_YEAR", 237950.5332), 'number'),
                     create_input_group("Biofuels Spares Cost (/hr)", "biofuels-spares-cost", DEFAULT_VESSEL.get("BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR", 3), 'number')
                 ], className="mb-3"),
-                # Shore Power related costs
                 dbc.Row([
                     create_input_group("Shore Power Maintenance/Day (EUR)", "shore-maint-cost", DEFAULT_VESSEL.get("SHORE_POWER_MAINTENANCE_PER_DAY", 45.486), 'number'),
                     create_input_group("Shore Power Spares/Day (EUR)", "shore-spares-cost", DEFAULT_VESSEL.get("SHORE_POWER_SPARES_PER_DAY", 45.486), 'number')
                 ], className="mb-3"),
-                # Additional operational cost factors
                 dbc.Row([
                     create_input_group("Parasitic Load Engine", "parasitic-load", DEFAULT_VESSEL.get("PARASITIC_LOAD_ENGINE", 0.95), 'number'),
                     create_input_group("Biofuels Blend (%)", "biofuels-blend", DEFAULT_VESSEL.get("BIOFUELS_BLEND_PERCENTAGE", 0.0), 'number'),

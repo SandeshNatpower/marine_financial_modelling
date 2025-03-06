@@ -9,7 +9,8 @@ from pages import input_module, output_module, power_profiles, reporting, databa
 app = dash.Dash(
     __name__,
     external_stylesheets=[dbc.themes.FLATLY],
-    suppress_callback_exceptions=True
+    suppress_callback_exceptions=True, 
+    title = "NatPower Marine Financial Modelling"
 )
 
 # Layout color and sizing constants (Maritime-inspired)
@@ -64,28 +65,11 @@ def get_sidebar():
         vertical=True,
         pills=True
     )
-    # Updated progress stepper: animated progress bar and dynamic text
-    progress_steps = html.Div([
-        html.P("Workflow Progress:", style={"fontWeight": "bold", "color": "#ecf0f1", "marginBottom": "0.5rem"}),
-        dbc.Progress(
-            value=50,  # This value can be updated dynamically
-            color=HIGHLIGHT_COLOR,
-            striped=True,
-            animated=True,
-            style={"height": "10px", "borderRadius": "5px"}
-        ),
-        html.Div(
-            "2 of 5 steps completed",
-            style={"marginTop": "0.5rem", "fontSize": "12px", "color": "#bdc3c7", "textAlign": "center"}
-        ),
-    ], style={"marginTop": "1.5rem"})
     # Logo Section with maritime icon
     logo_section = html.Div([
-        html.I(className="fas fa-anchor fa-2x", style={"color": HIGHLIGHT_COLOR}),
-        html.H2("Decarbonizer",
-                className="display-6",
-                style={"color": "#ecf0f1", "marginLeft": "10px", "fontWeight": "bold", "letterSpacing": "0.5px"})
-    ], style={"display": "flex", "alignItems": "center", "marginBottom": "2rem"})
+        html.Img(src="/assets/Natpower_Marine.png", style={"width": "200px", "marginBottom": "1rem"})
+    ])
+
     # Help button to trigger modal
     help_button = html.Div(
         html.Button("Need Help?", id="help-button", className="btn btn-outline-light btn-sm w-100",
@@ -104,7 +88,6 @@ def get_sidebar():
             html.Hr(style={"backgroundColor": "rgba(255,255,255,0.2)", "margin": "1rem 0"}),
             nav_links,
             html.Hr(style={"backgroundColor": "rgba(255,255,255,0.2)", "margin": "1rem 0"}),
-            progress_steps,
             info_note,
             help_button
         ],
@@ -176,7 +159,7 @@ app.layout = html.Div([
     Input("url", "pathname")
 )
 def update_breadcrumb(pathname):
-    base_items = [{"label": "Decarbonizer", "href": "/", "external_link": False}]
+    base_items = [{"label": "Natpower Marine Financial Modelling", "href": "/", "external_link": False}]
     if pathname == "/input":
         return base_items + [{"label": "Input", "href": "/input", "external_link": False}]
     elif pathname == "/output":

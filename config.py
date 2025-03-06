@@ -21,29 +21,22 @@ DEFAULT_VESSEL = {
     "displacement": 0,
     "main_engine_type": "4-Stroke",
     "aux_engine_type": "4-Stroke",
-    # Original power parameters (for backward compatibility)
     "total_engine_power": 38400,
     "shore_power_kw": 2020,
-    # Extended engine power details
-    "main_engine_power_kw": 38400,  # New: main engine power in kW
-    "aux_engine_power_kw": 2020,      # New: auxiliary engine power in kW
-    # Engine load factors
+    "main_engine_power_kw": 38400,
+    "aux_engine_power_kw": 2020,
     "sailing_engine_load": 0.5,
     "working_engine_load": 0.3,
     "shore_engine_load": 0.395,
-    # Operational days
     "sailing_days": 199,
     "working_days": 40,
     "idle_days": 126,
     "shore_days": 0,
-    # Port operations
     "shore_port": 2,
-    # Fuel type settings
     "main_fuel_type": "MDO",
     "aux_fuel_type": "MDO",
     "future_main_fuel_type": "Diesel-Bio-diesel",
     "future_aux_fuel_type": "Diesel-Bio-diesel",
-    # Reporting and cost parameters
     "reporting_year": 2030,
     "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
     "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
