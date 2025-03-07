@@ -27,6 +27,8 @@ def format_currency_value(value, currency, factor):
 
 def style_savings(val):
     try:
+        if val is None:
+            return ""
         num = float(val)
         if num > 0:
             return "text-success fw-bold"
@@ -36,10 +38,15 @@ def style_savings(val):
         pass
     return ""
 
+def safe_format_percentage(val):
+    if isinstance(val, (int, float)):
+        return f"{val:.1f}%"
+    return "N/A"
+
 # TABLE FUNCTIONS
 def get_current_output_table(api_data):
     current = api_data.get("current_table", {})
-    
+
     # SFC Data
     sfc_data = (current.get("average_sfc") or [{}])[0]
     sailing_sfc = sfc_data.get("sailing_avg_sfc", 191)
@@ -47,42 +54,78 @@ def get_current_output_table(api_data):
     idle_sfc    = sfc_data.get("idle_avg_sfc", 202)
     avg_sfc     = sfc_data.get("avg_sfc_day", 198)
     
-    # Emissions Data (CO2 TTW)
-    co2_data  = (current.get("co2_emission_ttw") or [{}])[0]
-    sailing_co2_ttw = co2_data.get("sailing_co2_emission_ttw", 286088)
-    working_co2_ttw = co2_data.get("working_co2_emission_ttw", 198669)
-    idle_co2_ttw    = co2_data.get("idle_co2_emission_ttw", 12562)
-    avg_co2_ttw     = co2_data.get("avg_co2_ttw_day", 182086)
+    # CH₄ Emissions Data (Current)
+    ch4_data = (current.get("ch4_emission_ttw") or [{}])[0]
+    sailing_ch4 = ch4_data.get("sailing_ch4_emission_ttw", 5)
+    working_ch4 = ch4_data.get("working_ch4_emission_ttw", 4)
+    idle_ch4    = ch4_data.get("idle_ch4_emission_ttw", 1)
+    avg_ch4     = ch4_data.get("avg_ch4_ttw_day", 4)
     
-    # Engine Power Data
-    eng_data  = (current.get("enginge_power") or [{}])[0]
+    # CO₂ Emissions (TTW, Current)
+    co2_ttw_data  = (current.get("co2_emission_ttw") or [{}])[0]
+    sailing_co2_ttw = co2_ttw_data.get("sailing_co2_emission_ttw", 286088)
+    working_co2_ttw = co2_ttw_data.get("working_co2_emission_ttw", 198669)
+    idle_co2_ttw    = co2_ttw_data.get("idle_co2_emission_ttw", 12562)
+    avg_co2_ttw     = co2_ttw_data.get("avg_co2_ttw_day", 182086)
+    
+    # CO₂ Emissions (WtW, Current)
+    co2_wtw_data = (current.get("co2_emission_wtw") or [{}])[0]
+    sailing_co2_wtw = co2_wtw_data.get("sailing_co2_emission_wtw", 340129)
+    working_co2_wtw = co2_wtw_data.get("working_co2_emission_wtw", 236197)
+    idle_co2_wtw    = co2_wtw_data.get("idle_co2_emission_wtw", 14935)
+    avg_co2_wtw     = co2_wtw_data.get("avg_co2_wtw_day", 216481)
+    
+    # N₂O Emissions Data (Current)
+    n2o_data = (current.get("n2o_emission_ttw") or [{}])[0]
+    sailing_n2o = n2o_data.get("sailing_n2o_emission_ttw", 16)
+    working_n2o = n2o_data.get("working_n2o_emission_ttw", 11)
+    idle_n2o    = n2o_data.get("idle_n2o_emission_ttw", 1)
+    avg_n2o     = n2o_data.get("avg_n2o_ttw_day", 11)
+    
+    # SOₓ Emissions Data (Current)
+    sox_data = (current.get("sox_emission_ttw") or [{}])[0]
+    sailing_sox = sox_data.get("sailing_sox_emission_ttw", 189)
+    working_sox = sox_data.get("working_sox_emission_ttw", 132)
+    idle_sox    = sox_data.get("idle_sox_emission_ttw", 9)
+    avg_sox     = sox_data.get("avg_sox_ttw_day", 121)
+    
+    # Fuel Price Data (Current)
+    fuel_price_data = (current.get("fuel_price") or [{}])[0]
+    sailing_fuel_price = fuel_price_data.get("sailing_fuel_price", 76874)
+    working_fuel_price = fuel_price_data.get("working_fuel_price", 53384)
+    idle_fuel_price    = fuel_price_data.get("idle_fuel_price", 3849)
+    avg_fuel_price     = fuel_price_data.get("avg_fuel_price_day", 49092)
+    
+    # Engine Power Data (Current)
+    eng_data  = (current.get("engine_power") or current.get("enginge_power") or [{}])[0]
     sailing_power = eng_data.get("sailing_power", 19200)
     working_power = eng_data.get("working_power", 11520)
     idle_power    = eng_data.get("idle_power", 798)
     max_power     = eng_data.get("max_power_day", 19200)
     avg_power     = eng_data.get("avg_power_req_day", 12006)
     
-    # Energy Requirement Data
+    # Energy Requirement Data (Current)
     power_day = (current.get("power_calc_day") or [{}])[0]
     sailing_energy = power_day.get("sailing_eneregy_req_kwh_day", 460800)
     working_energy = power_day.get("working_eneregy_req_kwh_day", 276480)
-    shore_energy   = power_day.get("idle_eneregy_req_kwh_day", 19152)
-    avg_energy     = power_day.get("power_req_day", 288142)
+    idle_energy   = power_day.get("idle_eneregy_req_kwh_day", 19152)
+    avg_energy    = power_day.get("power_req_day", 288142)
     
-    # Fuel Consumption Data
+    # Fuel Consumption Data (kg, Current)
     kg_data = (current.get("fuel_consumption_kg") or [{}])[0]
     sailing_fuel_kg = kg_data.get("sailing_fuel_consumption_kg", 87889)
     working_fuel_kg = kg_data.get("working_fuel_consumption_kg", 61033)
     idle_fuel_kg    = kg_data.get("idle_fuel_consumption_kg", 3859)
     avg_fuel_kg     = kg_data.get("avg_fuel_consumption_day", 55939)
     
+    # Fuel Consumption Data (liters, Current)
     fuel_data = (current.get("fuel_consumption_liters") or [{}])[0]
     sailing_fuel_l = fuel_data.get("sailing_fuel_consumption_liter", 98752)
     working_fuel_l = fuel_data.get("working_fuel_consumption_liter", 68577)
     idle_fuel_l    = fuel_data.get("idle_fuel_consumption_liter", 4336)
     avg_fuel_l     = fuel_data.get("avg_fuel_consumption_liter_day", 62853)
     
-    # Example static engine hours
+    # Example Static Engine Hours
     engine_hours = {
         "sailing": 24,
         "working": 24,
@@ -121,7 +164,7 @@ def get_current_output_table(api_data):
                 html.Td("Energy Req. (kWh)"),
                 html.Td(format_number(sailing_energy)),
                 html.Td(format_number(working_energy)),
-                html.Td(format_number(shore_energy)),
+                html.Td(format_number(idle_energy)),
                 html.Td("-"),
                 html.Td(format_number(avg_energy))
             ]),
@@ -142,6 +185,54 @@ def get_current_output_table(api_data):
                 html.Td(format_number(avg_sfc))
             ]),
             html.Tr([
+                html.Td("CH₄ Emissions (kg)"),
+                html.Td(format_number(sailing_ch4)),
+                html.Td(format_number(working_ch4)),
+                html.Td(format_number(idle_ch4)),
+                html.Td("-"),
+                html.Td(format_number(avg_ch4))
+            ]),
+            html.Tr([
+                html.Td("CO₂ Emissions (TTW, kg)"),
+                html.Td(format_number(sailing_co2_ttw)),
+                html.Td(format_number(working_co2_ttw)),
+                html.Td(format_number(idle_co2_ttw)),
+                html.Td("-"),
+                html.Td(format_number(avg_co2_ttw))
+            ]),
+            html.Tr([
+                html.Td("CO₂ Emissions (WtW, kg)"),
+                html.Td(format_number(sailing_co2_wtw)),
+                html.Td(format_number(working_co2_wtw)),
+                html.Td(format_number(idle_co2_wtw)),
+                html.Td("-"),
+                html.Td(format_number(avg_co2_wtw))
+            ]),
+            html.Tr([
+                html.Td("N₂O Emissions (kg)"),
+                html.Td(format_number(sailing_n2o)),
+                html.Td(format_number(working_n2o)),
+                html.Td(format_number(idle_n2o)),
+                html.Td("-"),
+                html.Td(format_number(avg_n2o))
+            ]),
+            html.Tr([
+                html.Td("SOₓ Emissions (kg)"),
+                html.Td(format_number(sailing_sox)),
+                html.Td(format_number(working_sox)),
+                html.Td(format_number(idle_sox)),
+                html.Td("-"),
+                html.Td(format_number(avg_sox))
+            ]),
+            html.Tr([
+                html.Td("Fuel Price"),
+                html.Td(format_number(sailing_fuel_price)),
+                html.Td(format_number(working_fuel_price)),
+                html.Td(format_number(idle_fuel_price)),
+                html.Td("-"),
+                html.Td(format_number(avg_fuel_price))
+            ]),
+            html.Tr([
                 html.Td("Fuel (kg)"),
                 html.Td(format_number(sailing_fuel_kg)),
                 html.Td(format_number(working_fuel_kg)),
@@ -157,17 +248,10 @@ def get_current_output_table(api_data):
                 html.Td("-"),
                 html.Td(format_number(avg_fuel_l))
             ]),
-            html.Tr([
-                html.Td("CO₂ Emissions (kg)"),
-                html.Td(format_number(sailing_co2_ttw)),
-                html.Td(format_number(working_co2_ttw)),
-                html.Td(format_number(idle_co2_ttw)),
-                html.Td("-"),
-                html.Td(format_number(avg_co2_ttw))
-            ]),
         ]),
     ], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
+
 
 def get_future_output_table(api_data):
     future = api_data.get("future_output_table", {})
@@ -179,11 +263,55 @@ def get_future_output_table(api_data):
     idle_sfc    = sfc_data.get("idle_avg_sfc", 202)
     avg_sfc     = sfc_data.get("avg_shore_sfc_day", 0)
     
-    # Engine Power Data
-    eng_data = (future.get("enginge_power") or [{}])[0]
+    # CH₄ Emissions Data (Future)
+    ch4_data = (future.get("ch4_emission_ttw") or [{}])[0]
+    sailing_ch4 = ch4_data.get("future_sailing_ch4_emission_ttw", 5)
+    working_ch4 = ch4_data.get("future_working_ch4_emission_ttw", 4)
+    idle_ch4    = ch4_data.get("future_idle_ch4_emission_ttw", 1)
+    avg_ch4     = ch4_data.get("future_avg_ch4_ttw_day", 4)
+    
+    # CO₂ Emissions (TTW)
+    co2_ttw_data  = (future.get("co2_emission_ttw") or [{}])[0]
+    sailing_co2_ttw = co2_ttw_data.get("future_sailing_co2_emission_ttw", 200262)
+    working_co2_ttw = co2_ttw_data.get("future_working_co2_emission_ttw", 139068)
+    idle_co2_ttw    = co2_ttw_data.get("future_idle_co2_emission_ttw", 8794)
+    avg_co2_ttw     = co2_ttw_data.get("future_avg_co2_ttw_day", 127461)
+    
+    # CO₂ Emissions (WtW)
+    co2_wtw_data = (future.get("co2_emission_wtw") or [{}])[0]
+    sailing_co2_wtw = co2_wtw_data.get("future_sailing_co2_emission_wtw", 243003)
+    working_co2_wtw = co2_wtw_data.get("future_working_co2_emission_wtw", 168749)
+    idle_co2_wtw    = co2_wtw_data.get("future_idle_co2_emission_wtw", 13655)
+    avg_co2_wtw     = co2_wtw_data.get("future_avg_co2_wtw_day", 155694)
+    
+    # N₂O Emissions Data
+    n2o_data = (future.get("n2o_emission_ttw") or [{}])[0]
+    sailing_n2o = n2o_data.get("future_sailing_n2o_emission_ttw", 16)
+    working_n2o = n2o_data.get("future_working_n2o_emission_ttw", 11)
+    idle_n2o    = n2o_data.get("future_idle_n2o_emission_ttw", 1)
+    avg_n2o     = n2o_data.get("future_avg_n2o_ttw_day", 11)
+    
+    # SOₓ Emissions Data
+    sox_data = (future.get("sox_emission_ttw") or [{}])[0]
+    sailing_sox = sox_data.get("future_sailing_sox_emission_ttw", 133)
+    working_sox = sox_data.get("future_working_sox_emission_ttw", 92)
+    idle_sox    = sox_data.get("future_idle_sox_emission_ttw", 8)
+    avg_sox     = sox_data.get("future_avg_sox_ttw_day", 86)
+    
+    # Fuel Price Data
+    fuel_price_data = (future.get("fuel_price") or [{}])[0]
+    sailing_fuel_price = fuel_price_data.get("future_sailing_fuel_price", 87640)
+    working_fuel_price = fuel_price_data.get("future_working_fuel_price", 60860)
+    idle_fuel_price    = fuel_price_data.get("future_idle_fuel_price", 3849)
+    shore_fuel_price   = fuel_price_data.get("future_shore_fuel_price", 0)
+    avg_fuel_price     = fuel_price_data.get("future_avg_fuel_price_day", 55781)
+    
+    # Engine Power Data – try "engine_power" first, then fallback
+    eng_data = (future.get("engine_power") or future.get("enginge_power") or [{}])[0]
     sailing_power = eng_data.get("sailing_power", 19200)
     working_power = eng_data.get("working_power", 11520)
     idle_power    = eng_data.get("idle_power", 798)
+    shore_power   = eng_data.get("shore_power", 0)
     max_power     = eng_data.get("max_power_day", 19200)
     avg_power     = eng_data.get("avg_shore_power_req_day", 0)
     
@@ -194,13 +322,14 @@ def get_future_output_table(api_data):
     shore_energy   = power_day.get("shore_eneregy_req_kwh_day", 0)
     avg_energy     = power_day.get("power_req_day", 288142)
     
-    # Fuel Consumption Data
+    # Fuel Consumption Data (kg)
     kg_data = (future.get("fuel_consumption_kg") or [{}])[0]
     sailing_fuel_kg = kg_data.get("sailing_fuel_consumption_kg", 87889)
     working_fuel_kg = kg_data.get("working_fuel_consumption_kg", 61033)
     idle_fuel_kg    = kg_data.get("idle_fuel_consumption_kg", 3859)
     avg_fuel_kg     = kg_data.get("avg_shore_fuel_consumption_day", 0)
     
+    # Fuel Consumption Data (liters)
     fuel_data = (future.get("fuel_consumption_liters") or [{}])[0]
     sailing_fuel_l = fuel_data.get("future_sailing_fuel_consumption_liter", 99761)
     working_fuel_l = fuel_data.get("future_working_fuel_consumption_liter", 69277)
@@ -209,7 +338,7 @@ def get_future_output_table(api_data):
     
     table = dbc.Table([
         html.Thead(html.Tr([
-            html.Th("Metric"),
+            html.Th("Metric", style={"backgroundColor": "#0A4B8C", "color": "white"}),
             html.Th("Sailing (199 days/yr)"),
             html.Th("Working (40 days/yr)"),
             html.Th("Idle/Moored (126 days/yr)"),
@@ -222,7 +351,7 @@ def get_future_output_table(api_data):
                 html.Td(format_number(sailing_power)),
                 html.Td(format_number(working_power)),
                 html.Td(format_number(idle_power)),
-                html.Td("-"),
+                html.Td(format_number(shore_power)),
                 html.Td(format_number(max_power))
             ]),
             html.Tr([
@@ -230,7 +359,7 @@ def get_future_output_table(api_data):
                 html.Td(format_number(sailing_power)),
                 html.Td(format_number(working_power)),
                 html.Td(format_number(idle_power)),
-                html.Td("-"),
+                html.Td(format_number(avg_power)),
                 html.Td(format_number(avg_power))
             ]),
             html.Tr([
@@ -238,16 +367,56 @@ def get_future_output_table(api_data):
                 html.Td(format_number(sailing_energy)),
                 html.Td(format_number(working_energy)),
                 html.Td(format_number(shore_energy)),
-                html.Td("-"),
+                html.Td(format_number(shore_energy)),
                 html.Td(format_number(avg_energy))
             ]),
             html.Tr([
-                html.Td("Avg. SFC (g/kWh)"),
-                html.Td(format_number(sailing_sfc)),
-                html.Td(format_number(working_sfc)),
-                html.Td(format_number(idle_sfc)),
+                html.Td("CH₄ Emissions (kg)"),
+                html.Td(format_number(sailing_ch4)),
+                html.Td(format_number(working_ch4)),
+                html.Td(format_number(idle_ch4)),
                 html.Td("-"),
-                html.Td(format_number(avg_sfc))
+                html.Td(format_number(avg_ch4))
+            ]),
+            html.Tr([
+                html.Td("CO₂ Emissions (TTW, kg)"),
+                html.Td(format_number(sailing_co2_ttw)),
+                html.Td(format_number(working_co2_ttw)),
+                html.Td(format_number(idle_co2_ttw)),
+                html.Td("-"),
+                html.Td(format_number(avg_co2_ttw))
+            ]),
+            html.Tr([
+                html.Td("CO₂ Emissions (WtW, kg)"),
+                html.Td(format_number(sailing_co2_wtw)),
+                html.Td(format_number(working_co2_wtw)),
+                html.Td(format_number(idle_co2_wtw)),
+                html.Td("-"),
+                html.Td(format_number(avg_co2_wtw))
+            ]),
+            html.Tr([
+                html.Td("N₂O Emissions (kg)"),
+                html.Td(format_number(sailing_n2o)),
+                html.Td(format_number(working_n2o)),
+                html.Td(format_number(idle_n2o)),
+                html.Td("-"),
+                html.Td(format_number(avg_n2o))
+            ]),
+            html.Tr([
+                html.Td("SOₓ Emissions (kg)"),
+                html.Td(format_number(sailing_sox)),
+                html.Td(format_number(working_sox)),
+                html.Td(format_number(idle_sox)),
+                html.Td("-"),
+                html.Td(format_number(avg_sox))
+            ]),
+            html.Tr([
+                html.Td("Fuel Price"),
+                html.Td(format_number(sailing_fuel_price)),
+                html.Td(format_number(working_fuel_price)),
+                html.Td(format_number(idle_fuel_price)),
+                html.Td(format_number(shore_fuel_price)),
+                html.Td(format_number(avg_fuel_price))
             ]),
             html.Tr([
                 html.Td("Fuel (kg)"),
@@ -269,122 +438,133 @@ def get_future_output_table(api_data):
     ], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
+
 def get_opex_comparison_table(api_data, currency, conv_factor):
-    # Read the OPEX savings values directly from the API response
-    opex = api_data.get("opex_table", {})
-    savings = (opex.get("Savings") or [{}])[0]
-    savings_perc = (opex.get("Savings_perc") or [{}])[0]
+    # Extract conventional cost data from current_table costs
+    conventional = (api_data.get("current_table", {}).get("costs") or [{}])[0]
+    conv_fuel_eu = conventional.get("avg_fueleu_day", 0)
+    conv_maintenance = conventional.get("avg_engine_maintenance_costs_day", 0)
+    conv_spare = conventional.get("avg_spares_consumables_costs_day", 0)
     
-    # Use the values provided by the API
-    fuel_eu = savings.get("savings_fuel_eu", 0)
-    fuel_price = savings.get("savings_fuel_price", 0)
-    maintenance = savings.get("savings_maintenance_cost", 0)
-    spare = savings.get("savings_spare_cost", 0)
+    # Extract fuel price from current_table fuel_price
+    current_fuel_price = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0]
+    conv_fuel_price = current_fuel_price.get("avg_fuel_price_day", 0)
     
-    perc_fuel = savings_perc.get("perc_savings_fuel_eu", 0)
-    perc_fuel_price = savings_perc.get("perc_savings_fuel_price", 0)
-    perc_maint = savings_perc.get("perc_savings_maintenance_cost", 0)
-    perc_spare = savings_perc.get("perc_savings_spare_cost", 0)
+    # Extract future cost data from future_output_table costs
+    future = (api_data.get("future_output_table", {}).get("costs") or [{}])[0]
+    fut_fuel_eu = future.get("future_avg_fueleu_day", 0)
+    fut_maintenance = future.get("future_avg_engine_maintenance_costs_day", 0)
+    fut_spare = future.get("future_avg_spares_consumables_costs_day", 0)
     
-    # Get currency formatting details
+    # Extract fuel price from future_output_table fuel_price
+    future_fuel_price = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0]
+    fut_fuel_price = future_fuel_price.get("future_avg_fuel_price_day", 0)
+    
+    # Build rows for each cost component
+    rows = [
+        {"metric": "Fuel / electricity", "conv": conv_fuel_eu, "fut": fut_fuel_eu},
+        {"metric": "Fuel Price", "conv": conv_fuel_price, "fut": fut_fuel_price},
+        {"metric": "Maintenance", "conv": conv_maintenance, "fut": fut_maintenance},
+        {"metric": "Spares / consumables", "conv": conv_spare, "fut": fut_spare},
+    ]
+    
+    # Total row
+    total_conv = sum(row["conv"] for row in rows)
+    total_fut = sum(row["fut"] for row in rows)
+    rows.append({"metric": "OPEX Total", "conv": total_conv, "fut": total_fut})
+    
+    # Build table rows by computing Savings and Savings (%)
+    table_rows = []
+    for row in rows:
+        conv_val = row["conv"]
+        fut_val = row["fut"]
+        savings = conv_val - fut_val
+        perc = (fut_val / conv_val - 1) * 100 if conv_val != 0 else None
+        table_rows.append(html.Tr([
+            html.Td(row["metric"]),
+            html.Td(format_currency_value(conv_val, currency, conv_factor)),
+            html.Td(format_currency_value(fut_val, currency, conv_factor)),
+            html.Td(format_currency_value(savings, currency, conv_factor), className=style_savings(savings)),
+            html.Td(safe_format_percentage(perc), className=style_savings(perc))
+        ]))
+        
     currency_symbol = get_currency_symbol(currency)
+    header = html.Thead(html.Tr([
+        html.Th("OPEX"),
+        html.Th(f"Conventional ({currency_symbol}/day)"),
+        html.Th(f"After measures ({currency_symbol}/day)"),
+        html.Th(f"Savings ({currency_symbol}/day)"),
+        html.Th("Savings (%)")
+    ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
     
-    # Format the values using helper functions
-    fuel_eu_fmt = format_currency_value(fuel_eu, currency, conv_factor)
-    fuel_price_fmt = format_currency_value(fuel_price, currency, conv_factor)
-    maintenance_fmt = format_currency_value(maintenance, currency, conv_factor)
-    spare_fmt = format_currency_value(spare, currency, conv_factor)
-    
-    table = dbc.Table([
-        html.Thead(html.Tr([
-            html.Th("Metric"),
-            html.Th(f"Savings ({currency_symbol})"),
-            html.Th("Savings (%)")
-        ]), style={"backgroundColor": "#0A4B8C", "color": "white"}),
-        html.Tbody([
-            html.Tr([
-                html.Td("Fuel EU"),
-                html.Td(fuel_eu_fmt, className=style_savings(fuel_eu)),
-                html.Td(f"{perc_fuel:.1f}%", className=style_savings(perc_fuel))
-            ]),
-            html.Tr([
-                html.Td("Fuel Price"),
-                html.Td(fuel_price_fmt, className=style_savings(fuel_price)),
-                html.Td(f"{perc_fuel_price:.1f}%", className=style_savings(perc_fuel_price))
-            ]),
-            html.Tr([
-                html.Td("Maintenance Cost"),
-                html.Td(maintenance_fmt, className=style_savings(maintenance)),
-                html.Td(f"{perc_maint:.1f}%", className=style_savings(perc_maint))
-            ]),
-            html.Tr([
-                html.Td("Spare Cost"),
-                html.Td(spare_fmt, className=style_savings(spare)),
-                html.Td(f"{perc_spare:.1f}%", className=style_savings(perc_spare))
-            ]),
-        ]),
-    ], bordered=True, striped=True, hover=True)
-    
+    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
 
 def get_emissions_comparison_table(api_data):
-    savings_data = (api_data.get("emissions_table", {}).get("Savings") or [{}])[0]
-    savings_perc_data = (api_data.get("emissions_table", {}).get("Savings_perc") or [{}])[0]
+    # Get conventional emissions from current_table and after-measures from future_output_table,
+    # using the average values for every metric.
+    current = api_data.get("current_table", {})
+    future = api_data.get("future_output_table", {})
 
-    ch4 = savings_data.get("savings_avg_ch4_ttw", 0)
-    co2_ttw = savings_data.get("savings_avg_co2_ttw", 54625)
-    co2_wtw = savings_data.get("savings_avg_co2_wtw", 60787)
-    nox = savings_data.get("savings_avg_nox_ttw", 906)
-    pm = savings_data.get("savings_avg_pm_ttw", 15)
-    sox = savings_data.get("savings_avg_sox_ttw", 35)
+    rows = []
+    # CO₂ Emissions TtW
+    co2_ttw_conv = (current.get("co2_emission_ttw") or [{}])[0].get("avg_co2_ttw_day", 182086)
+    co2_ttw_fut = (future.get("co2_emission_ttw") or [{}])[0].get("future_avg_co2_ttw_day", 127461)
+    rows.append({"metric": "CO₂ Emissions TtW", "conv": co2_ttw_conv, "fut": co2_ttw_fut})
 
-    perc_ch4 = savings_perc_data.get("savings_avg_ch4_ttw", 0)
-    perc_co2_ttw = savings_perc_data.get("perc_savings_avg_co2_ttw", 30)
-    perc_co2_wtw = savings_perc_data.get("perc_savings_avg_co2_wtw", 29)
-    perc_nox = savings_perc_data.get("perc_savings_avg_nox_ttw", 30)
-    perc_pm = savings_perc_data.get("perc_savings_avg_pm_ttw", 28)
-    perc_sox = savings_perc_data.get("perc_savings_avg_sox_ttw", 29)
+    # CO₂ Emissions WtW
+    co2_wtw_conv = (current.get("co2_emission_wtw") or [{}])[0].get("avg_co2_wtw_day", 216481)
+    co2_wtw_fut = (future.get("co2_emission_wtw") or [{}])[0].get("future_avg_co2_wtw_day", 155694)
+    rows.append({"metric": "CO₂ Emissions WtW", "conv": co2_wtw_conv, "fut": co2_wtw_fut})
 
-    table = dbc.Table([
-        html.Thead(html.Tr([
-            html.Th("Pollutant"),
-            html.Th("Savings (kg)"),
-            html.Th("Savings (%)")
-        ]), style={"backgroundColor": "#0A4B8C", "color": "white"}),
-        html.Tbody([
+    # NOₓ Emissions TtW
+    nox_conv = (current.get("nox_emission_ttw") or [{}])[0].get("avg_nox_ttw_day", 3071)
+    nox_fut = (future.get("nox_emission_ttw") or [{}])[0].get("future_avg_nox_ttw_day", 2165)
+    rows.append({"metric": "NOₓ Emissions TtW", "conv": nox_conv, "fut": nox_fut})
+
+    # SOₓ Emissions TtW
+    sox_conv = (current.get("sox_emission_ttw") or [{}])[0].get("avg_sox_ttw_day", 121)
+    sox_fut = (future.get("sox_emission_ttw") or [{}])[0].get("future_avg_sox_ttw_day", 86)
+    rows.append({"metric": "SOₓ Emissions TtW", "conv": sox_conv, "fut": sox_fut})
+
+    # PM Emissions TtW
+    pm_conv = (current.get("pm_emission_ttw") or [{}])[0].get("avg_pm_ttw_day", 54)
+    pm_fut = (future.get("pm_emission_ttw") or [{}])[0].get("future_avg_pm_ttw_day", 39)
+    rows.append({"metric": "PM Emissions TtW", "conv": pm_conv, "fut": pm_fut})
+
+    # CH₄ Emissions TtW (using average values)
+    ch4_conv = (current.get("ch4_emission_ttw") or [{}])[0].get("avg_ch4_ttw_day", 4)
+    ch4_fut = (future.get("ch4_emission_ttw") or [{}])[0].get("future_avg_ch4_ttw_day", 4)
+    rows.append({"metric": "CH₄ Emissions TtW", "conv": ch4_conv, "fut": ch4_fut})
+
+    # Build table rows: calculate savings (conventional - after measures)
+    table_rows = []
+    for row in rows:
+        conv_val = float(row["conv"]) if row["conv"] is not None else 0
+        fut_val = float(row["fut"]) if row["fut"] is not None else 0
+        savings = conv_val - fut_val
+        perc = (fut_val / conv_val - 1) * 100 if conv_val != 0 else None
+
+        table_rows.append(
             html.Tr([
-                html.Td("CH₄ Emissions"),
-                html.Td(format_number(ch4), className=style_savings(ch4)),
-                html.Td(f"{perc_ch4:.1f}%", className=style_savings(perc_ch4))
-            ]),
-            html.Tr([
-                html.Td("CO₂ Emissions (TtW)"),
-                html.Td(format_number(co2_ttw), className=style_savings(co2_ttw)),
-                html.Td(f"{perc_co2_ttw:.1f}%", className=style_savings(perc_co2_ttw))
-            ]),
-            html.Tr([
-                html.Td("CO₂ Emissions (WtW)"),
-                html.Td(format_number(co2_wtw), className=style_savings(co2_wtw)),
-                html.Td(f"{perc_co2_wtw:.1f}%", className=style_savings(perc_co2_wtw))
-            ]),
-            html.Tr([
-                html.Td("NOₓ Emissions"),
-                html.Td(format_number(nox), className=style_savings(nox)),
-                html.Td(f"{perc_nox:.1f}%", className=style_savings(perc_nox))
-            ]),
-            html.Tr([
-                html.Td("PM Emissions"),
-                html.Td(format_number(pm), className=style_savings(pm)),
-                html.Td(f"{perc_pm:.1f}%", className=style_savings(perc_pm))
-            ]),
-            html.Tr([
-                html.Td("SOₓ Emissions"),
-                html.Td(format_number(sox), className=style_savings(sox)),
-                html.Td(f"{perc_sox:.1f}%", className=style_savings(perc_sox))
-            ]),
-        ])
-    ], bordered=True, striped=True, hover=True)
+                html.Td(row["metric"]),
+                html.Td(f"{format_number(conv_val)}"),
+                html.Td(f"{format_number(fut_val)}"),
+                html.Td(f"{format_number(savings)}", className=style_savings(savings)),
+                html.Td(safe_format_percentage(perc), className=style_savings(perc))
+            ])
+        )
+
+    header = html.Thead(html.Tr([
+        html.Th("Emissions"),
+        html.Th("Conventional (kg/day)"),
+        html.Th("After measures (kg/day)"),
+        html.Th("Savings (kg/day)"),
+        html.Th("Savings (%)")
+    ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
+
+    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
 def layout():
@@ -407,7 +587,7 @@ def layout():
                                 {"label": "OPEX Comparison", "value": "opex"},
                                 {"label": "Emissions Comparison", "value": "emissions"}
                             ],
-                            value=['current', 'opex'],
+                            value=['opex', 'emissions'],
                             multi=True,
                             placeholder="Select tables to display..."
                         )

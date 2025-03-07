@@ -25,7 +25,7 @@ from pages import power_profiles
 def get_financial_data(params):
     default_params = {
         "main_engine_power_kw": 38400,
-        "aux_engine_power_kw": 2020,
+        "aux_engine_power_kw": 4020,  # Updated default auxiliary engine power
         "sailing_engine_load": 0.5,
         "working_engine_load": 0.3,
         "shore_engine_load": 0.395,
@@ -41,11 +41,13 @@ def get_financial_data(params):
         "reporting_year": 2030,
         "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
         "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
-        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
+        "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,  # New default for shore power maintenance cost/day
+        "SHORE_POWER_SPARES_PER_DAY": 45.486,        # New default for shore power spares cost/day
+        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 10,  # Updated default value per sample URL
         "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,
         "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,
-        "PARASITIC_LOAD_ENGINE": 0.95,
-        "BIOFUELS_BLEND_PERCENTAGE": 0.3,
+        "PARASITIC_LOAD_ENGINE": 0.9,   # Updated per sample URL
+        "BIOFUELS_BLEND_PERCENTAGE": 0.4,  # Updated per sample URL
         "shore_enable": False
     }
     default_params.update(params)
@@ -122,7 +124,8 @@ def register_callbacks(app):
         if not vessel_data:
             vessel_data = config.DEFAULT_VESSEL
         main_power = vessel_data.get("total_engine_power") or vessel_data.get("propulsion_consumption", 0) * 1000
-        aux_power = vessel_data.get("shore_power_kw") or vessel_data.get("average_hoteling_kw", 0)
+        # Use 'aux_engine_power_kw' if present; otherwise fall back to average_hoteling_kw.
+        aux_power = vessel_data.get("aux_engine_power_kw") or vessel_data.get("average_hoteling_kw", 0)
         return (
             main_power,
             aux_power,
@@ -189,6 +192,8 @@ def register_callbacks(app):
             State('fueleu-future-penalty', 'value'),
             State('parasitic-load', 'value'),
             State('biofuels-blend', 'value'),
+            State('shore-maint-cost', 'value'),
+            State('shore-spares-cost', 'value'),
             State('shore-enable', 'value'),
             State('vessel-data-store', 'data')
         ],
@@ -200,13 +205,18 @@ def register_callbacks(app):
         sailing_engine_load, working_engine_load, shore_engine_load,
         engine_maint_cost, spares_cost, fueleu_penalty,
         future_main_fuel_type, future_aux_fuel_type, biofuels_spares_cost,
-        fueleu_future_penalty, parasitic_load, biofuels_blend, shore_enable,
+        fueleu_future_penalty, parasitic_load, biofuels_blend,
+        shore_maint_cost, shore_spares_cost,
+        shore_enable,
         vessel_data
     ):
         if n_clicks is None or not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
             return None, "input"
         shore_port = vessel_data.get('shore_port', 1) if isinstance(vessel_data, dict) else 1
         reporting_year = vessel_data.get('reporting_year', 2030) if isinstance(vessel_data, dict) else 2030
+
+        # Convert shore_enable to boolean accepting both "yes" and "true"
+        shore_enable_bool = True if str(shore_enable).strip().lower() in ["yes", "true"] else False
 
         params = {
             "main_engine_power_kw": main_power,
@@ -226,12 +236,14 @@ def register_callbacks(app):
             "reporting_year": reporting_year,
             "ENGINE_MAINTENANCE_COSTS_PER_HOUR": engine_maint_cost,
             "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": spares_cost,
+            "SHORE_POWER_MAINTENANCE_PER_DAY": shore_maint_cost,
+            "SHORE_POWER_SPARES_PER_DAY": shore_spares_cost,
             "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": biofuels_spares_cost,
             "FUELEU_CURRENT_PENALTY_PER_YEAR": fueleu_penalty,
             "FUELEU_FUTURE_PENALTY_PER_YEAR": fueleu_future_penalty,
             "PARASITIC_LOAD_ENGINE": parasitic_load,
             "BIOFUELS_BLEND_PERCENTAGE": biofuels_blend,
-            "shore_enable": shore_enable
+            "shore_enable": shore_enable_bool
         }
         financial_data = get_financial_data(params)
         if financial_data:
@@ -569,7 +581,6 @@ def register_callbacks(app):
             }
         return fig
 
-    # AUTOMATIC REDIRECT CALLBACK
     @app.callback(
         Output("url", "pathname"),
         Input("tab-switch", "data"),
@@ -578,4 +589,6 @@ def register_callbacks(app):
     def redirect_to_output(tab):
         if tab == "output":
             return "/output"
+        elif tab == "input":
+            return "/input"
         return no_update
