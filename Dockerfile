@@ -17,5 +17,4 @@ COPY . /app
 # Expose Dash's default port
 EXPOSE 8050
 
-# Run the Dash app
-CMD ["python", "app.py"]
+CMD ["python", "-u", "app.py"]
