@@ -1,3 +1,5 @@
+#pages/power_profiles.py
+
 import dash
 from dash import html, dcc, Input, Output
 import dash_bootstrap_components as dbc
@@ -498,15 +500,17 @@ app.layout = layout()
      Input("year-range-slider", "value"),
      Input("scenario-filter", "value")]
 )
+
 def update_metric_comparison_chart(selected_metric, year_range, selected_scenarios):
     """
-    Update metric comparison chart based on user selection.
+    Update metric comparison chart based on user selection.# When NPV is selected, always use the "Project" scenario if selected_metric == "NPV": selected_scenarios = ["Project"]
+
     """
     years_data, scenarios = load_totex_scenarios()
     start_year, end_year = year_range
     indices = [i for i, yr in enumerate(years_data) if start_year <= yr <= end_year]
     filtered_years = [years_data[i] for i in indices]
-    
+
     fig = go.Figure()
     for label in selected_scenarios:
         metric_values = scenarios.get(label, {}).get(selected_metric, [])
@@ -526,6 +530,7 @@ def update_metric_comparison_chart(selected_metric, year_range, selected_scenari
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
     return fig
+
 
 @app.callback(
     Output("detail-power-profile-chart", "figure"),
