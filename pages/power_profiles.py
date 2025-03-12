@@ -1,121 +1,135 @@
 import dash
-from dash import html, dcc
+from dash import html, dcc, Input, Output
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import numpy as np
-from dash.dependencies import Input, Output
+import requests
+from urllib.parse import urlencode
+import config
 
 # =============================================================================
 # GLOBAL STYLES & CONSTANTS
 # =============================================================================
 HEADER_STYLE = {"backgroundColor": "#0A4B8C", "padding": "10px"}
-HEADER_TEXT_STYLE = {"color": "white", "margin": "0"}  # Forces header text to be white
+HEADER_TEXT_STYLE = {"color": "white", "margin": "0"}
 MARGIN_STYLE = dict(l=60, r=30, t=60, b=50)
 TEMPLATE_STYLE = "plotly_white"
 
 # =============================================================================
-# HELPER FUNCTIONS & DATA LOADING
+# 1) API HELPERS
 # =============================================================================
-def parse_currency(value_str):
+def get_vessel_data(imo=9419163, mmsi=9419163):
+    """
+    Fetch vessel details from the first API endpoint.
+    Returns the JSON response as a dictionary.
+    Correct API request:
+    https://natpower-marine-api-dev.azurewebsites.net/marinedata/getvesseldetails_engine?imo=9419163&mmsi=9419163
+    """
+    url = f"{config.VESSEL_ENDPOINT}?imo={imo}&mmsi={mmsi}"
     try:
-        return float(value_str.replace("€", "").replace("£", "").replace(",", "").strip())
-    except Exception:
-        return None
+        response = requests.get(url)
+        response.raise_for_status()
+        # Return the first item in the list
+        return response.json()[0]
+    except requests.RequestException as e:
+        print("Error fetching vessel data:", e)
+        return {}
 
-def generate_scenario_progression(initial_values, years=26):
-    if len(initial_values) < 2:
-        initial_values = initial_values + [initial_values[0]] * (2 - len(initial_values))
-    result = initial_values[:2]
-    for _ in range(2, years):
-        last_value = result[-1]
-        prev_last_value = result[-2]
-        trend = last_value - prev_last_value
-        variation = trend * (1 + np.random.uniform(-0.1, 0.1))
-        noise = np.random.normal(0, abs(trend) * 0.1)
-        next_value = last_value + variation + noise
-        result.append(next_value)
-    return result
+def get_default_financial_data():
+    """
+    Fetch financial data from the second API using parameters from vessel data where possible.
+    Returns the complete JSON response as a dictionary.
+    Correct API request:
+    https://natpower-marine-api-dev.azurewebsites.net/marinedata/financialmodelling?main_engine_power_kw=38400&aux_engine_power_kw=2020&...
+    """
+    vessel_data = get_vessel_data()
+    # Use vessel values if available; otherwise fall back to defaults.
+    default_params = {
+        "main_engine_power_kw": vessel_data.get("total_engine_power", 38400),
+        "aux_engine_power_kw": vessel_data.get("average_hoteling_kw", 2020),
+        "sailing_engine_load": 0.5,
+        "working_engine_load": 0.3,
+        "shore_engine_load": 0.395,
+        "sailing_days": 199,
+        "working_days": 40,
+        "idle_days": 126,
+        "shore_days": 0,
+        "shore_port": 1,
+        "main_fuel_type": "MDO",
+        "aux_fuel_type": "MDO",
+        "future_main_fuel_type": "Diesel-Bio-diesel",
+        "future_aux_fuel_type": "Diesel-Bio-diesel",
+        "reporting_year": 2030,
+        "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
+        "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
+        "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,
+        "SHORE_POWER_SPARES_PER_DAY": 45.486,
+        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
+        "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,
+        "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,
+        "PARASITIC_LOAD_ENGINE": 0.95,
+        "BIOFUELS_BLEND_PERCENTAGE": 0.3,
+        "shore_enable": False,
+        "inflation_rate": 0.02,
+        "npv_rate": 0,
+        "CAPEX": 19772750
+    }
+    qs = urlencode(default_params)
+    url = f"{config.FINANCIAL_ENDPOINT}?{qs}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print("Error fetching financial data:", e)
+        return {}
 
+# =============================================================================
+# 2) LOAD TIMESERIES DATA (TOTEX, NPV, SPARES)
+# =============================================================================
 def load_totex_scenarios():
-    years = list(range(2025, 2051))
-    scenario_list = [
-        {
-            "label": "MDO TOTEX BC",
-            "TOTEX": generate_scenario_progression([3877159, 8183338]),
-            "Result": generate_scenario_progression([-142168, -124728]),
-            "Cumulative": generate_scenario_progression([-142168, -266896]),
-            "NPV": generate_scenario_progression([-142168, -266896])
-        },
-        {
-            "label": "Bio Diesel blend Minimum",
-            "TOTEX": generate_scenario_progression([4019327, 8450234]),
-            "Result": generate_scenario_progression([-3148, 36818]),
-            "Cumulative": generate_scenario_progression([-3148, 33670]),
-            "NPV": generate_scenario_progression([-3148, 33670])
-        },
-        {
-            "label": "Bio Diesel blend +Shore Power Minimum",
-            "TOTEX": generate_scenario_progression([4776659, 9942061]),
-            "Result": generate_scenario_progression([-1065102, -1017039]),
-            "Cumulative": generate_scenario_progression([-1065102, -2082141]),
-            "NPV": generate_scenario_progression([-1065102, -2082141])
-        },
-        {
-            "label": "Methanol power with Bio blend Minimum",
-            "TOTEX": generate_scenario_progression([6436373, 13394070]),
-            "Result": generate_scenario_progression([-4349, -4523]),
-            "Cumulative": generate_scenario_progression([-4349, -8873]),
-            "NPV": generate_scenario_progression([-4349, -8873])
-        },
-        {
-            "label": "Methanol power + Shore Power with Bio blend Minimum",
-            "TOTEX": generate_scenario_progression([7019286, 14519473]),
-            "Result": generate_scenario_progression([-1066423, -1018473]),
-            "Cumulative": generate_scenario_progression([-1066423, -2084895]),
-            "NPV": generate_scenario_progression([-1066423, -2084895])
-        },
-        {
-            "label": "MDO + Shore Power + Battery (2030)",
-            "TOTEX": generate_scenario_progression([4776659, 9942061]),
-            "Result": generate_scenario_progression([-1065102, -1017039]),
-            "Cumulative": generate_scenario_progression([-1065102, -2082141]),
-            "NPV": generate_scenario_progression([-1065102, -2082141])
-        }
-    ]
-    scenarios = {sc["label"]: sc for sc in scenario_list}
+    """
+    Extract timeseries data from the API response for TOTEX, NPV, and SPARES.
+    Returns (years, scenarios) where scenarios includes 'Current', 'Future', and 'Project'.
+    """
+    data = get_default_financial_data()
+    current_ts = data.get("current_timeseries", [])
+    future_ts = data.get("future_timeseries", [])
+    result = data.get("result", [])
+    
+    if not current_ts or not future_ts or not result:
+        years = list(range(2025, 2051))
+        current_totex = [0] * len(years)
+        future_totex = [0] * len(years)
+        project_npv = [0] * len(years)
+        current_spares = [0] * len(years)
+        future_spares = [0] * len(years)
+    else:
+        years = [entry.get("year") for entry in current_ts]
+        current_opex = [entry.get("current_opex", 0) for entry in current_ts]
+        future_opex = [entry.get("future_opex", 0) for entry in future_ts]
+        project_npv = [entry.get("npv", 0) for entry in result]
+        current_spares = [entry.get("total_spare_current_inflated", 0) for entry in current_ts]
+        future_spares = [entry.get("total_spare_future_inflated", 0) for entry in future_ts]
+        
+        # Calculate cumulative TOTEX (cumulative OPEX)
+        current_totex = np.cumsum(current_opex).tolist()
+        future_totex = np.cumsum(future_opex).tolist()
+    
+    scenarios = {
+        "Current": {"TOTEX": current_totex, "SPARES": current_spares},
+        "Future": {"TOTEX": future_totex, "SPARES": future_spares},
+        "Project": {"NPV": project_npv}
+    }
     return years, scenarios
 
-# Global Data for Cashflow & TOTEX Charts
-years = list(range(2025, 2051))
-cumulative_values = [
-    -17775770, -15777664, -13778408, -10858568, -7937532, -3757239, 424298,
-    4607103, 11223362, 17840941, 25841936, 33844304, 41848073, 51705944,
-    61565272, 73135955, 84708154, 96281899, 111453588, 126626886, 143183894,
-    159742577, 176302967, 199621906, 222942622, 247328280
-]
-npv_values = cumulative_values[:]  # Using same data as placeholder
-
-totex_labels = [
-    "MDO + Shore Power + Battery (2030)",
-    "Methanol power + Shore Power with Bio blend Minimum",
-    "Methanol power with Bio blend Minimum",
-    "Bio Diesel blend +Shore Power Minimum",
-    "Bio Diesel blend Minimum",
-    "MDO"
-]
-totex_values = [
-    236766710,
-    236409592,
-    213738389,
-    200172194,
-    185217874,
-    226268243
-]
-
 # =============================================================================
-# FIGURE HELPER FUNCTION
+# 3) FIGURE HELPER
 # =============================================================================
 def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
+    """
+    Apply a consistent layout to Plotly figures.
+    """
     fig.update_layout(
         title=title,
         title_font_color="#0A4B8C",
@@ -127,60 +141,161 @@ def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     return fig
 
 # =============================================================================
-# FIGURE FUNCTIONS
+# 4) FIGURE FUNCTIONS
 # =============================================================================
 def dwelling_at_berth_pie_figure():
-    labels = ["Fuel", "Financing", "Maintenance", "Spares / consumables", "EU ETS", "FuelEU"]
-    values = [63, 0, 9, 2, 1, 25]
+    """
+    Build a pie chart for cost breakdown using yearly API data for the reporting year.
+    """
+    data = get_default_financial_data()
+    reporting_year = 2030  # From default parameters
+    current_ts = data.get("current_timeseries", [])
+    yearly_data = next((entry for entry in current_ts if entry.get("year") == reporting_year), {})
+    
+    labels = ["Fuel", "Maintenance", "Spares", "FuelEU Penalty"]
+    values = [
+        yearly_data.get("total_fuel_current_inflated", 0),
+        yearly_data.get("total_maintenance_current_inflated", 0),
+        yearly_data.get("total_spare_current_inflated", 0),
+        yearly_data.get("current_penalty", 0)
+    ]
+    
     fig = go.Figure([go.Pie(labels=labels, values=values, hoverinfo="label+percent", textinfo="label+percent")])
-    set_figure_layout(fig, "Dwelling at Berth - Biofuel Blend Minimum")
-    return fig
+    return set_figure_layout(fig, f"Cost Breakdown for Current Scenario ({reporting_year})")
 
 def cashflow_figure():
+    """
+    Build a bar and line chart for cumulative savings vs. NPV using API data.
+    """
+    years, scenarios = load_totex_scenarios()
+    project_npv = scenarios["Project"]["NPV"]
+    result = get_default_financial_data().get("result", [])
+    cumulative_savings = [entry.get("cumulative", 0) for entry in result]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=years, y=cumulative_savings, name="Cumulative Savings", marker_color="blue"))
+    fig.add_trace(go.Scatter(
+        x=years, y=project_npv, mode="lines+markers", name="NPV",
+        line=dict(color="black", width=2), marker=dict(size=6)
+    ))
+    return set_figure_layout(fig, "Cumulative Savings vs. NPV", "Year", "Amount (£)")
+
+def totex_figure():
+    """
+    Build a grouped bar chart comparing TOTEX (cumulative OPEX) between Current and Future scenarios.
+    """
+    years, scenarios = load_totex_scenarios()
+    
+    fig = go.Figure()
+    for label in ["Current", "Future"]:
+        fig.add_trace(go.Bar(x=years, y=scenarios[label]["TOTEX"], name=label))
+    return set_figure_layout(fig, "TOTEX Comparison (Cumulative OPEX)", "Year", "TOTEX (£)")
+
+def engine_power_profile_figure():
+    """
+    Build a grouped bar chart comparing engine power profiles using correct API keys.
+    """
+    data = get_default_financial_data()
+    current_table = data.get("current_table", {})
+    future_table = data.get("future_output_table", {})
+    
+    # Using the key "enginge_power" (as per API typo)
+    current_eng = current_table.get("enginge_power", [{}])[0]
+    future_eng = future_table.get("enginge_power", [{}])[0]
+    
+    categories = ["Idle", "Sailing", "Working"]
+    current_values = [
+        current_eng.get("idle_power", 0),
+        current_eng.get("sailing_power", 0),
+        current_eng.get("working_power", 0)
+    ]
+    future_values = [
+        future_eng.get("idle_power", 0),
+        future_eng.get("sailing_power", 0),
+        future_eng.get("working_power", 0)
+    ]
+    
+    fig = go.Figure(data=[
+        go.Bar(name="Current", x=categories, y=current_values, marker_color="blue"),
+        go.Bar(name="Future", x=categories, y=future_values, marker_color="orange")
+    ])
+    fig.update_layout(
+        barmode="group",
+        title="Engine Power Profile (kW)",
+        xaxis_title="Operating Mode",
+        yaxis_title="Power (kW)",
+        template=TEMPLATE_STYLE
+    )
+    return fig
+
+def energy_demand_figure():
+    """
+    Build a bar chart comparing total daily energy demand (kWh) using correct API keys.
+    """
+    data = get_default_financial_data()
+    current_table = data.get("current_table", {})
+    future_table = data.get("future_output_table", {})
+    
+    # Using "power_calc_day" with the known typo "eneregy"
+    cur_pcd = current_table.get("power_calc_day", [{}])[0]
+    fut_pcd = future_table.get("power_calc_day", [{}])[0]
+    
+    cur_total = sum([
+        cur_pcd.get("idle_eneregy_req_kwh_day", 0),
+        cur_pcd.get("sailing_eneregy_req_kwh_day", 0),
+        cur_pcd.get("working_eneregy_req_kwh_day", 0)
+    ])
+    fut_total = sum([
+        fut_pcd.get("idle_eneregy_req_kwh_day", 0),
+        fut_pcd.get("sailing_eneregy_req_kwh_day", 0),
+        fut_pcd.get("working_eneregy_req_kwh_day", 0)
+    ])
+    
+    fig = go.Figure(data=[
+        go.Bar(name="Current", x=["Total Daily Energy (kWh)"], y=[cur_total], marker_color="blue"),
+        go.Bar(name="Future", x=["Total Daily Energy (kWh)"], y=[fut_total], marker_color="orange")
+    ])
+    fig.update_layout(
+        barmode="group",
+        title="Daily Energy Demand - Current vs. Future",
+        template=TEMPLATE_STYLE
+    )
+    return fig
+
+def spares_figure():
+    """
+    Build a line chart comparing spares cost over time.
+    """
+    years, scenarios = load_totex_scenarios()
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=years,
-        y=cumulative_values,
-        mode='lines',
-        name='Cumulative'
+        y=scenarios["Current"]["SPARES"],
+        mode="lines+markers",
+        name="Current Spares",
+        line=dict(color="blue", width=2),
+        marker=dict(size=6)
     ))
     fig.add_trace(go.Scatter(
         x=years,
-        y=npv_values,
-        mode='lines',
-        name='NPV'
+        y=scenarios["Future"]["SPARES"],
+        mode="lines+markers",
+        name="Future Spares",
+        line=dict(color="orange", width=2),
+        marker=dict(size=6)
     ))
-    set_figure_layout(fig, "Cashflow Analysis", "Year", "Value (£)")
-    return fig
-
-def totex_figure():
-    fig = go.Figure([go.Bar(
-        x=totex_labels,
-        y=totex_values,
-        text=totex_values,
-        textposition='auto'
-    )])
-    set_figure_layout(fig, "TOTEX Comparison", "Scenario", "TOTEX (£)")
+    fig.update_layout(
+        title="Spares Over Time",
+        xaxis_title="Year",
+        yaxis_title="Spares (inflated cost)",
+        template=TEMPLATE_STYLE
+    )
     return fig
 
 # =============================================================================
-# ADDITIONAL HELPER: DAILY LOAD PROFILE GENERATOR
-# =============================================================================
-def generate_load_profile(peak_power, base_load_percent, hours=24):
-    base_load = peak_power * base_load_percent / 100.0
-    amplitude = peak_power - base_load
-    x = np.linspace(0, 24, hours)
-    # Create a sinusoidal load profile with a phase shift for a realistic daily variation
-    y = base_load + amplitude * np.sin((x - 6) / 24 * 2 * np.pi)
-    # Ensure the load does not drop below the base load
-    y = np.maximum(y, base_load)
-    return x, y
-
-# =============================================================================
-# LAYOUT HELPERS
+# 5) LAYOUT HELPERS & FUNCTIONS
 # =============================================================================
 def card_component(title, children):
-    """Helper to create a card with a consistent header and styling."""
     return dbc.Card([
         dbc.CardHeader(
             html.H4(title, className="card-title mb-0", style=HEADER_TEXT_STYLE),
@@ -189,16 +304,18 @@ def card_component(title, children):
         dbc.CardBody(children)
     ], className="mb-4 shadow-sm rounded")
 
-# =============================================================================
-# LAYOUT FUNCTIONS
-# =============================================================================
 def financial_metrics_layout():
     years_data, scenarios = load_totex_scenarios()
-    scenario_options = [{"label": s["label"], "value": s["label"]} for s in scenarios.values()]
-    default_scenarios = [s["label"] for s in scenarios.values()]
+    scenario_options = [
+        {"label": "Current Scenario", "value": "Current"},
+        {"label": "Future Scenario", "value": "Future"},
+        {"label": "Project Savings", "value": "Project"}
+    ]
+    default_scenarios = ["Current", "Future"]
     return dbc.Card([
         dbc.CardHeader(
-            html.H4("TOTEX & Financial Metrics Comparison (2025–2050)", className="card-title", style=HEADER_TEXT_STYLE),
+            html.H4("TOTEX & Financial Metrics Comparison (2025–2050)",
+                    className="card-title", style=HEADER_TEXT_STYLE),
             style=HEADER_STYLE
         ),
         dbc.CardBody([
@@ -208,9 +325,7 @@ def financial_metrics_layout():
                     dcc.Dropdown(
                         id="metric-dropdown",
                         options=[
-                            {"label": "TOTEX", "value": "TOTEX"},
-                            {"label": "Result", "value": "Result"},
-                            {"label": "Cumulative", "value": "Cumulative"},
+                            {"label": "TOTEX (Cumulative OPEX)", "value": "TOTEX"},
                             {"label": "NPV", "value": "NPV"}
                         ],
                         value="TOTEX",
@@ -245,7 +360,7 @@ def financial_metrics_layout():
             html.Hr(),
             dbc.Row([
                 dbc.Col(card_component(
-                    "Dwelling at Berth - Biofuel Blend Minimum",
+                    "Cost Breakdown for Current Scenario (2030)",
                     dcc.Graph(figure=dwelling_at_berth_pie_figure(), className="chart-container")
                 ), md=12, xs=12)
             ]),
@@ -254,20 +369,20 @@ def financial_metrics_layout():
 
 def power_demand_layout():
     return html.Div([
-        html.H2("Power Demand Analysis", className='page-title'),
+        html.H2("Power Demand Analysis", className="page-title"),
         dbc.Row([
             dbc.Col(
-                card_component("Load Profile Configuration", [
-                    dcc.Graph(id='detail-power-profile-chart', className="chart-container"),
+                card_component("Load Profile Configuration (Synthetic)", [
+                    dcc.Graph(id="detail-power-profile-chart", className="chart-container"),
                     dbc.Row([
                         dbc.Col([
                             dbc.Label("Peak Power Demand (kW)"),
-                            dbc.Input(id='detail-peak-power', type='number', value=25000, className="custom-input")
+                            dbc.Input(id="detail-peak-power", type="number", value=25000, className="custom-input")
                         ], md=4, xs=12),
                         dbc.Col([
                             dbc.Label("Base Load (%)"),
                             dcc.Slider(
-                                id='detail-base-load',
+                                id="detail-base-load",
                                 min=20,
                                 max=80,
                                 value=40,
@@ -281,43 +396,59 @@ def power_demand_layout():
             dbc.Col(
                 card_component("Energy Storage Options", [
                     dcc.Dropdown(
-                        id='detail-storage-type',
+                        id="detail-storage-type",
                         options=[
-                            {'label': 'Lithium-Ion Battery', 'value': 'li-ion'},
-                            {'label': 'Fuel Cells', 'value': 'fuel-cell'},
-                            {'label': 'Supercapacitors', 'value': 'capacitor'}
+                            {"label": "Lithium-Ion Battery", "value": "li-ion"},
+                            {"label": "Fuel Cells", "value": "fuel-cell"},
+                            {"label": "Supercapacitors", "value": "capacitor"}
                         ],
                         multi=True,
                         placeholder="Select storage options",
                         className="custom-dropdown"
                     ),
-                    html.Div(id='detail-storage-results', className='mt-3')
+                    html.Div(id="detail-storage-results", className="mt-3")
                 ]),
                 md=4, xs=12
             )
         ]),
+        html.Br(),
         dbc.Row([
             dbc.Col(card_component(
-                "Projected Energy Demand Over Time",
-                dcc.Graph(id='energy-demand-chart', className="chart-container")
+                "Projected Energy Demand Over Time (Synthetic Example)",
+                dcc.Graph(id="energy-demand-chart", className="chart-container")
             ), xs=12)
         ]),
+        html.Br(),
         dbc.Row([
             dbc.Col(card_component(
-                "Cashflow Analysis",
-                dcc.Graph(figure=cashflow_figure(), id='cashflow-chart', className="chart-container")
+                "Cashflow Analysis (API-based)",
+                dcc.Graph(id="cashflow-chart", figure=cashflow_figure(), className="chart-container")
             ), xs=12)
         ]),
+        html.Br(),
         dbc.Row([
             dbc.Col(card_component(
-                "TOTEX Comparison",
-                dcc.Graph(figure=totex_figure(), id='totex-chart', className="chart-container")
+                "TOTEX Comparison (API-based)",
+                dcc.Graph(id="totex-chart", figure=totex_figure(), className="chart-container")
+            ), xs=12)
+        ]),
+        html.Br(),
+        dbc.Row([
+            dbc.Col(card_component(
+                "Daily Energy Demand (API-based)",
+                dcc.Graph(figure=energy_demand_figure(), className="chart-container")
+            ), xs=12)
+        ]),
+        html.Br(),
+        dbc.Row([
+            dbc.Col(card_component(
+                "Spares Over Time (API-based)",
+                dcc.Graph(figure=spares_figure(), className="chart-container")
             ), xs=12)
         ])
     ])
 
 def multi_chart_dashboard_layout():
-    """Dashboard tab to select and display multiple charts."""
     return dbc.Card([
         dbc.CardHeader(
             html.H4("Multi-Chart Dashboard", className="card-title", style=HEADER_TEXT_STYLE),
@@ -329,14 +460,13 @@ def multi_chart_dashboard_layout():
                     dcc.Checklist(
                         id="dashboard-chart-selector",
                         options=[
-                            {"label": "Dwelling at Berth", "value": "dwelling"},
                             {"label": "NPV Comparison", "value": "npv"},
                             {"label": "Cashflow Analysis", "value": "cashflow"},
-                            {"label": "TOTEX Comparison", "value": "totex"}
+                            {"label": "TOTEX Comparison", "value": "totex"},
+                            {"label": "Engine Power Profile", "value": "engine"}
                         ],
-                        # Default to all available charts
-                        value=["dwelling", "npv", "cashflow", "totex"],
-                        labelStyle={'display': 'inline-block', 'margin-right': '15px'}
+                        value=["npv", "cashflow", "totex", "engine"],
+                        labelStyle={"display": "inline-block", "margin-right": "15px"}
                     ),
                     width=12
                 )
@@ -356,12 +486,12 @@ def layout():
     ], fluid=True)
 
 # =============================================================================
-# DASH APP & CALLBACKS
+# 6) DASH APP & CALLBACKS
 # =============================================================================
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.layout = layout()
 
-# Callback to update the dynamic financial metrics chart
+# --- Financial Metrics Tab Callback ---
 @app.callback(
     Output("metric-comparison-chart", "figure"),
     [Input("metric-dropdown", "value"),
@@ -369,44 +499,55 @@ app.layout = layout()
      Input("scenario-filter", "value")]
 )
 def update_metric_comparison_chart(selected_metric, year_range, selected_scenarios):
+    """
+    Update metric comparison chart based on user selection.
+    """
     years_data, scenarios = load_totex_scenarios()
     start_year, end_year = year_range
-    # Identify indices corresponding to the selected year range
     indices = [i for i, yr in enumerate(years_data) if start_year <= yr <= end_year]
+    filtered_years = [years_data[i] for i in indices]
+    
     fig = go.Figure()
-    for label, sc in scenarios.items():
-        if selected_scenarios and label not in selected_scenarios:
-            continue
-        metric_values = sc.get(selected_metric)
+    for label in selected_scenarios:
+        metric_values = scenarios.get(label, {}).get(selected_metric, [])
         if metric_values:
-            filtered_years = [years_data[i] for i in indices]
             filtered_values = [metric_values[i] for i in indices]
             fig.add_trace(go.Scatter(
                 x=filtered_years,
                 y=filtered_values,
-                mode="lines",
-                name=label
+                mode="lines+markers",
+                name=f"{label} {selected_metric}"
             ))
-    fig = set_figure_layout(fig, f"{selected_metric} Comparison", "Year", f"{selected_metric} (£)")
-    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+    fig.update_layout(
+        title=f"{selected_metric} Comparison",
+        xaxis_title="Year",
+        yaxis_title=f"{selected_metric} (£)",
+        template=TEMPLATE_STYLE,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
     return fig
 
-# Callback to update the daily load profile chart
 @app.callback(
     Output("detail-power-profile-chart", "figure"),
     [Input("detail-peak-power", "value"),
      Input("detail-base-load", "value")]
 )
 def update_power_profile_chart(peak_power, base_load):
-    if not peak_power or not base_load:
+    if not peak_power:
         peak_power = 25000
+    if not base_load:
         base_load = 40
-    x, y = generate_load_profile(peak_power, base_load)
-    fig = go.Figure(data=go.Scatter(x=x, y=y, mode='lines', name="Load Profile"))
-    fig.update_layout(title="Daily Load Profile", xaxis_title="Hour", yaxis_title="Power (kW)", template=TEMPLATE_STYLE)
+    hours = np.linspace(0, 24, 100)
+    y = base_load + (peak_power - base_load) * 0.5 * (np.sin((hours - 6) / 24 * 2 * np.pi) + 1)
+    fig = go.Figure(data=go.Scatter(x=hours, y=y, mode="lines", name="Load Profile"))
+    fig.update_layout(
+        title="Daily Load Profile (Synthetic)",
+        xaxis_title="Hour",
+        yaxis_title="Power (kW)",
+        template="plotly_white"
+    )
     return fig
 
-# Callback to update the projected energy demand chart
 @app.callback(
     Output("energy-demand-chart", "figure"),
     [Input("detail-peak-power", "value")]
@@ -414,16 +555,19 @@ def update_power_profile_chart(peak_power, base_load):
 def update_energy_demand_chart(peak_power):
     if not peak_power:
         peak_power = 25000
-    # Assume the average power is about half the peak and project annual energy consumption with a 2% growth rate
     base_energy = peak_power * 24 * 0.5
     years_proj = list(range(2025, 2051))
     growth_rate = 0.02
     energy_demand = [base_energy * ((1 + growth_rate) ** (year - 2025)) for year in years_proj]
-    fig = go.Figure(data=go.Scatter(x=years_proj, y=energy_demand, mode='lines', name="Energy Demand"))
-    fig.update_layout(title="Projected Energy Demand Over Time", xaxis_title="Year", yaxis_title="Energy Demand (kWh)", template=TEMPLATE_STYLE)
+    fig = go.Figure(data=go.Scatter(x=years_proj, y=energy_demand, mode="lines", name="Energy Demand"))
+    fig.update_layout(
+        title="Projected Energy Demand (Synthetic)",
+        xaxis_title="Year",
+        yaxis_title="Energy Demand (kWh)",
+        template="plotly_white"
+    )
     return fig
 
-# Callback to update storage options results
 @app.callback(
     Output("detail-storage-results", "children"),
     [Input("detail-storage-type", "value")]
@@ -433,51 +577,34 @@ def update_storage_results(selected_storage):
         return "No storage option selected."
     return html.Ul([html.Li(f"Option: {option}") for option in selected_storage])
 
-# Callback to update charts in the Multi-Chart Dashboard tab
 @app.callback(
     Output("dashboard-charts-container", "children"),
-    Input("dashboard-chart-selector", "value")
+    [Input("dashboard-chart-selector", "value")]
 )
 def update_dashboard_charts(selected_charts):
-    # If no charts are selected, display a message.
     if not selected_charts:
         return html.Div("No charts selected.", style={"text-align": "center", "padding": "20px"})
+    years, scenarios = load_totex_scenarios()
     charts = []
-    if "dwelling" in selected_charts:
-        charts.append(
-            card_component("Dwelling at Berth - Biofuel Blend Minimum",
-                           dcc.Graph(figure=dwelling_at_berth_pie_figure(), className="chart-container"))
-        )
     if "npv" in selected_charts:
-        # For the dashboard, the NPV metric can be shown using the dynamic metric chart (with NPV selected)
-        # Here we simulate it by loading the NPV values for all scenarios.
-        years_data, scenarios = load_totex_scenarios()
         fig = go.Figure()
-        for label, sc in scenarios.items():
-            if "NPV" in sc and len(sc["NPV"]) == len(years_data):
-                fig.add_trace(go.Scatter(
-                    x=years_data,
-                    y=sc["NPV"],
-                    mode="lines",
-                    name=label
-                ))
-        fig = set_figure_layout(fig, "NPV Comparison", "Year", "NPV (£)")
-        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-        charts.append(
-            card_component("NPV Comparison",
-                           dcc.Graph(figure=fig, className="chart-container"))
+        npv_data = scenarios["Project"]["NPV"]
+        fig.add_trace(go.Scatter(x=years, y=npv_data, mode="lines", name="Project NPV"))
+        fig.update_layout(
+            title="NPV Comparison",
+            xaxis_title="Year",
+            yaxis_title="NPV (£)",
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
         )
+        charts.append(card_component("NPV Comparison", dcc.Graph(figure=fig, className="chart-container")))
     if "cashflow" in selected_charts:
-        charts.append(
-            card_component("Cashflow Analysis",
-                           dcc.Graph(figure=cashflow_figure(), className="chart-container"))
-        )
+        charts.append(card_component("Cashflow Analysis", dcc.Graph(figure=cashflow_figure(), className="chart-container")))
     if "totex" in selected_charts:
-        charts.append(
-            card_component("TOTEX Comparison",
-                           dcc.Graph(figure=totex_figure(), className="chart-container"))
-        )
+        charts.append(card_component("TOTEX Comparison", dcc.Graph(figure=totex_figure(), className="chart-container")))
+    if "engine" in selected_charts:
+        charts.append(card_component("Engine Power Profile", dcc.Graph(figure=engine_power_profile_figure(), className="chart-container")))
     return charts
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run_server(debug=True)

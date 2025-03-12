@@ -1,3 +1,4 @@
+import dash
 import json
 import requests
 from urllib.parse import urlencode
@@ -7,6 +8,7 @@ import config
 import plotly.graph_objects as go
 
 # Import helper functions from output_module and power_profiles
+from pages.input_module import get_vessel_details
 from pages.output_module import (
     get_current_output_table,
     get_future_output_table,
@@ -22,51 +24,57 @@ from pages import power_profiles
 ###########################################################################
 # API CALL HELPER FUNCTION
 ###########################################################################
-def get_financial_data(params):
-    # Updated defaults to match the sample API URL and new parameters
-    default_params = {
-        "main_engine_power_kw": 38400,
-        "aux_engine_power_kw": 2020,              # Updated default auxiliary engine power
-        "sailing_engine_load": 0.5,
-        "working_engine_load": 0.3,
-        "shore_engine_load": 0.395,
-        "sailing_days": 199,
-        "working_days": 40,
-        "idle_days": 126,
-        "shore_days": 0,
-        "shore_port": 1,
-        "main_fuel_type": "MDO",
-        "aux_fuel_type": "MDO",
-        "future_main_fuel_type": "Diesel-Bio-diesel",
-        "future_aux_fuel_type": "Diesel-Bio-diesel",
-        "reporting_year": 2030,
-        "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
-        "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
-        "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,  # New default for shore power maintenance cost/day
-        "SHORE_POWER_SPARES_PER_DAY": 45.486,        # New default for shore power spares cost/day
-        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,  # Updated default per sample URL
-        "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,
-        "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,
-        "PARASITIC_LOAD_ENGINE": 0.95,             # Updated per sample URL
-        "BIOFUELS_BLEND_PERCENTAGE": 0.3,            # Updated per sample URL
-        "shore_enable": False,
-        "inflation_rate": 0.02,                      # New parameter with sample default
-        "npv_rate": 0,                             # New parameter (default set to 0)
-        "CAPEX": 19772750                          # New parameter (sample default)
-    }
-    # Update defaults with any user-provided parameters
-    default_params.update(params)
-    query_string = urlencode(default_params)
-    url = f"{config.FINANCIAL_ENDPOINT}?{query_string}"
+def get_financial_data(input_params=None):
+    """
+    Fetch financial data from the API using parameters from input if provided.
+    Returns the complete JSON response as a dictionary.
+    
+    Correct API call example:
+    https://natpower-marine-api-dev.azurewebsites.net/marinedata/financialmodelling?main_engine_power_kw=38400&aux_engine_power_kw=2020&...
+    """
+    # If no parameters are provided, use defaults from the default vessel.
+    if input_params is None:
+        vessel_data = get_vessel_details(config.DEFAULT_VESSEL["imo"])
+        input_params = {
+            "main_engine_power_kw": vessel_data.get("total_engine_power", 38400),
+            "aux_engine_power_kw": vessel_data.get("average_hoteling_kw", 2020),
+            "sailing_engine_load": 0.5,
+            "working_engine_load": 0.3,
+            "shore_engine_load": 0.395,
+            "sailing_days": 199,
+            "working_days": 40,
+            "idle_days": 126,
+            "shore_days": 0,
+            "shore_port": 1,
+            "main_fuel_type": "MDO",
+            "aux_fuel_type": "MDO",
+            "future_main_fuel_type": "Diesel-Bio-diesel",
+            "future_aux_fuel_type": "Diesel-Bio-diesel",
+            "reporting_year": 2030,
+            "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
+            "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
+            "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,
+            "SHORE_POWER_SPARES_PER_DAY": 45.486,
+            "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
+            "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,
+            "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,
+            "PARASITIC_LOAD_ENGINE": 0.95,
+            "BIOFUELS_BLEND_PERCENTAGE": 0.3,
+            "shore_enable": False,
+            "inflation_rate": 0.02,
+            "npv_rate": 0,
+            "CAPEX": 19772750
+        }
+    qs = urlencode(input_params)
+    # Use the FINANCIAL_ENDPOINT from config without appending extra path segments.
+    url = f"{config.FINANCIAL_ENDPOINT}?{qs}"
+    
     try:
         response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print("Error fetching financial data:", response.status_code)
-            return {}
-    except Exception as e:
-        print("Exception fetching financial data:", e)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print("Error fetching financial data:", e)
         return {}
 
 ###########################################################################
@@ -74,36 +82,49 @@ def get_financial_data(params):
 ###########################################################################
 def process_financial_results(api_data):
     """
-    Processes the API response to extract and combine data from 'result'
-    and 'current_timeseries'.
-    
+    Processes the API response to combine data from 'result', 'current_timeseries',
+    and 'future_timeseries' arrays.
+
+    Args:
+        api_data (dict): Raw API response containing result and timeseries data.
+
     Returns:
-        List of dicts with keys: year, npv, cumulative, yearly_result,
-        current_opex, current_penalty, total_fuel_current_inflated,
-        total_maintenance_current_inflated, total_spare_current_inflated.
+        list: List of dictionaries with combined financial data per year.
     """
     results = api_data.get("result", [])
-    timeseries = api_data.get("current_timeseries", [])
+    current_timeseries = api_data.get("current_timeseries", [])
+    future_timeseries = api_data.get("future_timeseries", [])
     processed = []
     for res in results:
         year = res.get("year")
-        ts_entry = next((ts for ts in timeseries if ts.get("year") == year), {})
+        current_ts = next((ts for ts in current_timeseries if ts.get("year") == year), {})
+        future_ts = next((ts for ts in future_timeseries if ts.get("year") == year), {})
         processed.append({
             "year": year,
-            "npv": res.get("npv"),
-            "cumulative": res.get("cumulative"),
-            "yearly_result": res.get("result"),
-            "current_opex": ts_entry.get("current_opex"),
-            "current_penalty": ts_entry.get("current_penalty"),
-            "total_fuel_current_inflated": ts_entry.get("total_fuel_current_inflated"),
-            "total_maintenance_current_inflated": ts_entry.get("total_maintenance_current_inflated"),
-            "total_spare_current_inflated": ts_entry.get("total_spare_current_inflated")
+            "npv": res.get("npv", 0),
+            "cumulative": res.get("cumulative", 0),
+            "yearly_result": res.get("result", 0),
+            "current_opex": current_ts.get("current_opex", 0),
+            "future_opex": future_ts.get("future_opex", 0),
+            "current_penalty": current_ts.get("current_penalty", 0),
+            "future_penalty": future_ts.get("future_penalty", 0),
+            "total_fuel_current_inflated": current_ts.get("total_fuel_current_inflated", 0),
+            "total_maintenance_current_inflated": current_ts.get("total_maintenance_current_inflated", 0),
+            "total_spare_current_inflated": current_ts.get("total_spare_current_inflated", 0)
         })
     return processed
 
-def create_processed_results_table(processed_data):
+def create_processed_results_table(processed_data, conv_factor, currency):
     """
-    Creates an HTML table from the processed financial results.
+    Creates an HTML table from processed financial results with currency conversion.
+
+    Args:
+        processed_data (list): List of dictionaries from process_financial_results.
+        conv_factor (float): Currency conversion factor.
+        currency (str): Selected currency symbol or code.
+
+    Returns:
+        dbc.Table: Formatted table displaying financial results.
     """
     header = html.Thead(
         html.Tr([
@@ -111,8 +132,10 @@ def create_processed_results_table(processed_data):
             html.Th("NPV"),
             html.Th("Cumulative"),
             html.Th("Yearly Result"),
-            html.Th("Current Opex"),
+            html.Th("Current OPEX"),
+            html.Th("Future OPEX"),
             html.Th("Current Penalty"),
+            html.Th("Future Penalty"),
             html.Th("Fuel Cost"),
             html.Th("Maintenance"),
             html.Th("Spare")
@@ -122,14 +145,16 @@ def create_processed_results_table(processed_data):
     for item in processed_data:
         rows.append(html.Tr([
             html.Td(item.get("year")),
-            html.Td(item.get("npv")),
-            html.Td(item.get("cumulative")),
-            html.Td(item.get("yearly_result")),
-            html.Td(item.get("current_opex")),
-            html.Td(item.get("current_penalty")),
-            html.Td(item.get("total_fuel_current_inflated")),
-            html.Td(item.get("total_maintenance_current_inflated")),
-            html.Td(item.get("total_spare_current_inflated"))
+            html.Td(f"{format_currency_value(item.get('npv', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('cumulative', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('yearly_result', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('current_opex', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('future_opex', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('current_penalty', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('future_penalty', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('total_fuel_current_inflated', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('total_maintenance_current_inflated', 0), conv_factor, currency)}"),
+            html.Td(f"{format_currency_value(item.get('total_spare_current_inflated', 0), conv_factor, currency)}")
         ]))
     table = dbc.Table([header, html.Tbody(rows)], bordered=True, hover=True, responsive=True)
     return table
@@ -138,6 +163,8 @@ def create_processed_results_table(processed_data):
 # REGISTER ALL CALLBACKS
 ###########################################################################
 def register_callbacks(app):
+    """Registers all Dash callbacks for the application."""
+
     # --- Vessel/Input Module Callbacks ---
     @app.callback(
         [Output('search-results', 'children'),
@@ -167,6 +194,7 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def update_vessel_fields_callback(vessel_data):
+        # Use the vessel API response values if available (e.g., 'build' for year built)
         if not vessel_data:
             vessel_data = config.DEFAULT_VESSEL
         return (
@@ -174,7 +202,7 @@ def register_callbacks(app):
             vessel_data.get('imo', config.DEFAULT_VESSEL["imo"]),
             vessel_data.get('new_vessel_category', config.DEFAULT_VESSEL["vessel_category"]),
             vessel_data.get('gross_tonnage', config.DEFAULT_VESSEL["gross_tonnage"]),
-            vessel_data.get('year_built', config.DEFAULT_VESSEL["year_built"]),
+            vessel_data.get('build', config.DEFAULT_VESSEL["year_built"]),
             vessel_data.get('dwt', config.DEFAULT_VESSEL["dwt"])
         )
 
@@ -193,13 +221,13 @@ def register_callbacks(app):
     def update_technical_specs(vessel_data):
         if not vessel_data:
             vessel_data = config.DEFAULT_VESSEL
-        main_power = vessel_data.get("total_engine_power") or vessel_data.get("propulsion_consumption", 0) * 1000
-        aux_power = vessel_data.get("aux_engine_power_kw") or vessel_data.get("average_hoteling_kw", 0)
+        main_power = vessel_data.get("total_engine_power", config.DEFAULT_VESSEL.get("total_engine_power", 38400))
+        aux_power = vessel_data.get("average_hoteling_kw", config.DEFAULT_VESSEL.get("average_hoteling_kw", 2020))
         return (
             main_power,
             aux_power,
-            vessel_data.get("main_engine_type", config.DEFAULT_VESSEL["main_engine_type"]),
-            vessel_data.get("aux_engine_type", config.DEFAULT_VESSEL["aux_engine_type"]),
+            vessel_data.get("main_engine_type", "Unknown"),
+            vessel_data.get("aux_engine_type", "Unknown"),
             vessel_data.get("main_fuel_type", "MDO"),
             vessel_data.get("aux_fuel_type", "MDO")
         )
@@ -211,15 +239,6 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def update_vessel_image(vessel_category):
-        """
-        Update the vessel image and vessel type display based on the vessel category.
-        
-        Args:
-            vessel_category: The vessel category/type
-            
-        Returns:
-            tuple: (image_path, vessel_type_display)
-        """
         if not vessel_category:
             return '/assets/default_vessel.png', "No vessel selected"
         if isinstance(vessel_category, dict):
@@ -253,8 +272,8 @@ def register_callbacks(app):
         if not vessel_data:
             vessel_data = config.DEFAULT_VESSEL
         return (
-            vessel_data.get('sailing_days', 175),
-            vessel_data.get('working_days', 165),
+            vessel_data.get('sailing_days', 199),
+            vessel_data.get('working_days', 40),
             vessel_data.get('idle_days', 126),
             vessel_data.get('shore_days', 0),
             vessel_data.get('sailing_engine_load', 0.5) * 100,
@@ -262,10 +281,9 @@ def register_callbacks(app):
             vessel_data.get('shore_engine_load', 0.395) * 100,
             vessel_data.get('ENGINE_MAINTENANCE_COSTS_PER_HOUR', 20),
             vessel_data.get('SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR', 2),
-            vessel_data.get('FUELEU_CURRENT_PENALTY_PER_YEAR', 919412.47)
+            vessel_data.get('FUELEU_CURRENT_PENALTY_PER_YEAR', 729348.5444)
         )
 
-    # Updated callback to include npv_rate and CAPEX (assumed input IDs: 'npv-rate' and 'CAPEX')
     @app.callback(
         [Output('emissions-data-store', 'data'),
          Output('tab-switch', 'data')],
@@ -308,53 +326,54 @@ def register_callbacks(app):
         future_main_fuel_type, future_aux_fuel_type, biofuels_spares_cost,
         fueleu_future_penalty, parasitic_load, biofuels_blend,
         shore_maint_cost, shore_spares_cost,
-        shore_enable, npv_rate, CAPEX,
+        shore_enable, npv_rate, capex,
         vessel_data
     ):
         if n_clicks is None or not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
             return None, "input"
         shore_port = vessel_data.get('shore_port', 1) if isinstance(vessel_data, dict) else 1
         reporting_year = vessel_data.get('reporting_year', 2030) if isinstance(vessel_data, dict) else 2030
-
-        # Convert shore_enable to boolean
+        # Convert the shore_enable input to a boolean
         shore_enable_bool = True if str(shore_enable).strip().lower() in ["yes", "true"] else False
 
+        # Build parameters dictionary from inputs.
         params = {
-            "main_engine_power_kw": main_power,
-            "aux_engine_power_kw": aux_power,
-            "sailing_engine_load": sailing_engine_load / 100.0,
-            "working_engine_load": working_engine_load / 100.0,
-            "shore_engine_load": shore_engine_load / 100.0,
-            "sailing_days": sailing_days,
-            "working_days": working_days,
-            "idle_days": idle_days,
-            "shore_days": shore_days,
-            "shore_port": shore_port,
+            "main_engine_power_kw": float(main_power),
+            "aux_engine_power_kw": float(aux_power),
+            "sailing_engine_load": float(sailing_engine_load) / 100.0,
+            "working_engine_load": float(working_engine_load) / 100.0,
+            "shore_engine_load": float(shore_engine_load) / 100.0,
+            "sailing_days": int(sailing_days),
+            "working_days": int(working_days),
+            "idle_days": int(idle_days),
+            "shore_days": int(shore_days),
+            "shore_port": int(shore_port),
             "main_fuel_type": main_fuel_type,
             "aux_fuel_type": aux_fuel_type,
             "future_main_fuel_type": future_main_fuel_type,
             "future_aux_fuel_type": future_aux_fuel_type,
-            "reporting_year": reporting_year,
-            "ENGINE_MAINTENANCE_COSTS_PER_HOUR": engine_maint_cost,
-            "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": spares_cost,
-            "SHORE_POWER_MAINTENANCE_PER_DAY": shore_maint_cost,
-            "SHORE_POWER_SPARES_PER_DAY": shore_spares_cost,
-            "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": biofuels_spares_cost,
-            "FUELEU_CURRENT_PENALTY_PER_YEAR": fueleu_penalty,
-            "FUELEU_FUTURE_PENALTY_PER_YEAR": fueleu_future_penalty,
-            "PARASITIC_LOAD_ENGINE": parasitic_load,
-            "BIOFUELS_BLEND_PERCENTAGE": biofuels_blend,
+            "reporting_year": int(reporting_year),
+            "ENGINE_MAINTENANCE_COSTS_PER_HOUR": float(engine_maint_cost),
+            "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(spares_cost),
+            "SHORE_POWER_MAINTENANCE_PER_DAY": float(shore_maint_cost),
+            "SHORE_POWER_SPARES_PER_DAY": float(shore_spares_cost),
+            "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(biofuels_spares_cost),
+            "FUELEU_CURRENT_PENALTY_PER_YEAR": float(fueleu_penalty),
+            "FUELEU_FUTURE_PENALTY_PER_YEAR": float(fueleu_future_penalty),
+            "PARASITIC_LOAD_ENGINE": float(parasitic_load),
+            "BIOFUELS_BLEND_PERCENTAGE": float(biofuels_blend),
             "shore_enable": shore_enable_bool,
-            "npv_rate": npv_rate,
-            "CAPEX": CAPEX
+            "inflation_rate": 0.02,  # Hardcoded as per API example
+            "npv_rate": float(npv_rate),
+            "CAPEX": float(capex)
         }
+        # Use the input parameters in the API call.
         financial_data = get_financial_data(params)
         if financial_data:
             return financial_data, "output"
         else:
             return None, "input"
 
-    # Updated display callback to show processed results along with other tables
     @app.callback(
         Output('output-content', 'children'),
         [Input('emissions-data-store', 'data'),
@@ -378,14 +397,14 @@ def register_callbacks(app):
             tables.append(
                 dbc.Card([
                     dbc.CardHeader(html.H4("Current Output Table")),
-                    dbc.CardBody(get_current_output_table(api_data))
+                    dbc.CardBody(get_current_output_table(api_data, conv_factor, currency))
                 ], className="mb-4")
             )
         if 'future' in selected_tables:
             tables.append(
                 dbc.Card([
                     dbc.CardHeader(html.H4("Future Output Table")),
-                    dbc.CardBody(get_future_output_table(api_data))
+                    dbc.CardBody(get_future_output_table(api_data, conv_factor, currency))
                 ], className="mb-4")
             )
         if 'opex' in selected_tables:
@@ -403,10 +422,9 @@ def register_callbacks(app):
                 ], className="mb-4")
             )
 
-        # Process the new response fields and create a summary table
         processed_results = process_financial_results(api_data)
         if processed_results:
-            summary_table = create_processed_results_table(processed_results)
+            summary_table = create_processed_results_table(processed_results, conv_factor, currency)
             tables.append(
                 dbc.Card([
                     dbc.CardHeader(html.H4("Financial Results Summary")),
@@ -435,7 +453,6 @@ def register_callbacks(app):
             
             fig = go.Figure()
             
-            # Alternating shaded background
             for i, year in enumerate(filtered_years[:-1]):
                 if i % 2 == 0:
                     fig.add_shape(
@@ -628,86 +645,6 @@ def register_callbacks(app):
         return fig
 
     @app.callback(
-        Output('cashflow-chart', 'figure'),
-        Input('emissions-data-store', 'data')
-    )
-    def update_cashflow_chart(api_data):
-        if not api_data or "result" not in api_data:
-            fig = go.Figure()
-            fig.update_layout(
-                title="No Cashflow Data Available",
-                template="plotly_white"
-            )
-            return fig
-
-        # Extract cashflow data from the API response
-        results = api_data["result"]
-        years = [item["year"] for item in results]
-        cumulative = [item["cumulative"] for item in results]
-        npv = [item["npv"] for item in results]
-
-        # Build the chart with a bar trace for cumulative and a line trace for NPV
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=years,
-            y=cumulative,
-            name='Cumulative'
-        ))
-        fig.add_trace(go.Scatter(
-            x=years,
-            y=npv,
-            mode='lines+markers',
-            name='NPV',
-            line=dict(color='black', width=2),
-            marker=dict(size=6)
-        ))
-        fig.update_layout(
-            title="Cashflow (Cumulative vs. NPV)",
-            xaxis_title="Year",
-            yaxis_title="Amount (EUR)",
-            barmode='group',
-            template="plotly_white",
-            legend=dict(x=0, y=1.1, orientation="h")
-        )
-        return fig
-
-    @app.callback(
-        Output('totex-chart', 'figure'),
-        [Input('detail-peak-power', 'value')]
-    )
-    def update_totex_chart(_):
-        try:
-            fig = go.Figure()
-            totex_text = [f"£{val:,.0f}" for val in power_profiles.totex_values]
-            fig.add_trace(go.Bar(
-                x=power_profiles.totex_values,
-                y=power_profiles.totex_labels,
-                orientation='h',
-                marker_color='navy',
-                text=totex_text,
-                textposition='outside'
-            ))
-            fig.update_layout(
-                title="TOTEX Comparison",
-                xaxis_title="Cost (GBP)",
-                yaxis_title="Configurations",
-                template="plotly_white"
-            )
-        except Exception as e:
-            fig = {
-                'data': [],
-                'layout': {
-                    'title': 'Error Creating TOTEX Chart',
-                    'annotations': [{
-                        'text': f"Error: {str(e)}",
-                        'showarrow': False,
-                        'font': {'color': 'red'}
-                    }]
-                }
-            }
-        return fig
-
-    @app.callback(
         Output("url", "pathname"),
         Input("tab-switch", "data"),
         prevent_initial_call=True
@@ -718,3 +655,8 @@ def register_callbacks(app):
         elif tab == "input":
             return "/input"
         return no_update
+
+    # --- Additional Callbacks (if any) ---
+    # Add more callbacks here as needed
+
+    # End of register_callbacks

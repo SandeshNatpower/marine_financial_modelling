@@ -1,3 +1,4 @@
+#config.py
 import os
 
 # API Endpoints
@@ -9,89 +10,93 @@ FINANCIAL_ENDPOINT = f"{API_BASE}/financialmodelling"
 DEFAULT_VESSEL = {
     "imo": 9803613,
     "vessel_name": "MSC GRANDIOSA",
-    "vessel_category": "CRUISE PASSENGER SHIP",
+    "vessel_category": "CRUISE_PASSENGER_SHIP",
     "gross_tonnage": 181541,
     "year_built": 2019,
-    "cruising_speed": 21.3,
-    "dwt": 13610,
-    "draught": 9.0,
-    "beam": 43,
-    "length": 331,
-    "depth": 15.5,
-    "displacement": 0,
+    "cruising_speed": 21.3,  # Knots
+    "dwt": 13610,  # Deadweight tonnage in metric tons
+    "draught": 9.0,  # Meters
+    "beam": 43,  # Meters
+    "length": 331,  # Meters
+    "depth": 15.5,  # Meters
+    "displacement": 0,  # Tons; consider updating with actual data if available
     "main_engine_type": "4-Stroke",
     "aux_engine_type": "4-Stroke",
-    "total_engine_power": 38400,
-    "shore_power_kw": 2020,
-    "main_engine_power_kw": 38400,
-    "aux_engine_power_kw": 2020,
-    "sailing_engine_load": 0.5,
-    "working_engine_load": 0.3,
-    "shore_engine_load": 0.395,
-    "sailing_days": 199,
-    "working_days": 40,
-    "idle_days": 126,
-    "shore_days": 0,
-    "shore_port": 2,
+    "total_engine_power": 38400,  # kW
+    "shore_power_kw": 2020,  # kW
+    "main_engine_power_kw": 38400,  # kW
+    "aux_engine_power_kw": 2020,  # kW
+    "sailing_engine_load": 0.5,  # Fraction (0-1)
+    "working_engine_load": 0.3,  # Fraction (0-1)
+    "shore_engine_load": 0.395,  # Fraction (0-1)
+    "sailing_days": 199,  # Days per year
+    "working_days": 40,  # Days per year
+    "idle_days": 126,  # Days per year
+    "shore_days": 0,  # Days per year
+    "shore_port": 1,  # Number of ports with shore power capability
     "main_fuel_type": "MDO",
     "aux_fuel_type": "MDO",
     "future_main_fuel_type": "Diesel-Bio-diesel",
     "future_aux_fuel_type": "Diesel-Bio-diesel",
     "reporting_year": 2030,
-    "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
-    "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
-    "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,
-    "SHORE_POWER_SPARES_PER_DAY": 45.486,
-    "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
-    "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,
-    "FUELEU_FUTURE_PENALTY_PER_YEAR": 237950.5332,
-    "PARASITIC_LOAD_ENGINE": 0.95,
-    "BIOFUELS_BLEND_PERCENTAGE": 0.0,
-    "shore_enable": True
+    "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,  # EUR/hour
+    "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,  # EUR/hour
+    "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,  # EUR/day
+    "SHORE_POWER_SPARES_PER_DAY": 45.486,  # EUR/day
+    "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,  # EUR/hour
+    "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,  # EUR/year
+    "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,  # EUR/year
+    "PARASITIC_LOAD_ENGINE": 0.95,  # Fraction (0-1)
+    "BIOFUELS_BLEND_PERCENTAGE": 0.3,  # Fraction (0-1)
+    "shore_enable": False,  # Boolean
+    "inflation_rate": 0.02,  # Fraction (0-1)
+    "npv_rate": 0,  # Fraction (0-1)
+    "CAPEX": 19772750  # EUR
 }
 
-# Fuel Options
+# Fuel Options for UI Selection
 FUEL_OPTIONS = [
-    {"label": "Marine Diesel Oil (MDO)",                       "value": "MDO"},
-    {"label": "Marine Gas Oil (MGO)",                         "value": "MGO"},
-    {"label": "Low Sulfur Fuel Oil (LFO)",                    "value": "LFO"},
-    {"label": "Heavy Fuel Oil (HFO)",                         "value": "HFO"},
-    {"label": "Liquefied Natural Gas - Medium (LNG med.)",    "value": "LNG med."},
-    {"label": "Liquefied Natural Gas - Slow (LNG slow)",      "value": "LNG slow"},
-    {"label": "Liquefied Natural Gas - Diesel (LNG Diesel)",  "value": "LNG Diesel"},
-    {"label": "Liquefied Natural Gas - LBSI (LNG LBSI)",      "value": "LNG LBSI"},
-    {"label": "Liquefied Petroleum Gas (LPG)",                "value": "LPG"},
-    {"label": "Hydrogen (H2)",                                "value": "H2"},
-    {"label": "Ammonia (NH3)",                                "value": "NH3"},
-    {"label": "Methanol",                                     "value": "Methanol"},
-    {"label": "Ethanol",                                      "value": "Ethanol"},
-    {"label": "Biodiesel (Bio-diesel)",                       "value": "Bio-diesel"},
-    {"label": "Hydrotreated Vegetable Oil (HVO)",             "value": "HVO"},
-    {"label": "Bio-LNG (Medium) (Bio-LNG med.)",              "value": "Bio-LNG med."},
-    {"label": "Bio-LNG (Slow) (Bio-LNG slow)",                "value": "Bio-LNG slow"},
-    {"label": "Bio-LNG (Diesel) (Bio-LNG Diesel)",            "value": "Bio-LNG Diesel"},
-    {"label": "Bio-LNG (LBSI) (Bio-LNG LBSI)",                "value": "Bio-LNG LBSI"},
-    {"label": "Biomethanol (Bio-methanol)",                   "value": "Bio-methanol"},
-    {"label": "Other",                                        "value": "Other"},
-    {"label": "Bio-Hydrogen (Bio-H2)",                        "value": "Bio-H2"},
-    {"label": "Electro-Diesel (e-diesel)",                    "value": "e-diesel"},
-    {"label": "Electro-Methanol (e-methanol)",                "value": "e-methanol"},
-    {"label": "Electro-LNG (Medium) (e-LNG med.)",            "value": "e-LNG med."},
-    {"label": "Electro-LNG (Slow) (e-LNG slow)",              "value": "e-LNG slow"},
-    {"label": "Electro-LNG (Diesel) (e-LNG Diesel)",          "value": "e-LNG Diesel"},
-    {"label": "Electro-LNG (LBSI) (e-LNG LBSI)",              "value": "e-LNG LBSI"},
-    {"label": "Electro-Hydrogen (e-H2)",                      "value": "e-H2"},
-    {"label": "Electro-Ammonia (e-NH3)",                      "value": "e-NH3"},
-    {"label": "Electro-LPG (e-LPG)",                          "value": "e-LPG"},
-    {"label": "Electro-DME (e-DME)",                          "value": "e-DME"},
-    {"label": "Hydrogen",                                     "value": "Hydrogen"},
-    {"label": "Full Electric (Full_Electric)",                "value": "Full_Electric"},
-    {"label": "Methanol / MDO / e-Methanol Mix",              "value": "Methanol MDO e-methanol"},
-    {"label": "Electricity (Natpower)",                       "value": "Electricity Natpower"},
-    {"label": "Diesel / Bio-Diesel Blend",                    "value": "Diesel-Bio-diesel"},
-    {"label": "Electricity (Grid)",                           "value": "Electricity"},
+    {"label": "Marine Diesel Oil (MDO)", "value": "MDO"},
+    {"label": "Marine Gas Oil (MGO)", "value": "MGO"},
+    {"label": "Low Sulfur Fuel Oil (LFO)", "value": "LFO"},
+    {"label": "Heavy Fuel Oil (HFO)", "value": "HFO"},
+    {"label": "Liquefied Natural Gas - Medium (LNG med.)", "value": "LNG med."},
+    {"label": "Liquefied Natural Gas - Slow (LNG slow)", "value": "LNG slow"},
+    {"label": "Liquefied Natural Gas - Diesel (LNG Diesel)", "value": "LNG Diesel"},
+    {"label": "Liquefied Natural Gas - LBSI (LNG LBSI)", "value": "LNG LBSI"},
+    {"label": "Liquefied Petroleum Gas (LPG)", "value": "LPG"},
+    {"label": "Hydrogen (H2)", "value": "H2"},
+    {"label": "Ammonia (NH3)", "value": "NH3"},
+    {"label": "Methanol", "value": "Methanol"},
+    {"label": "Ethanol", "value": "Ethanol"},
+    {"label": "Biodiesel (Bio-diesel)", "value": "Bio-diesel"},
+    {"label": "Hydrotreated Vegetable Oil (HVO)", "value": "HVO"},
+    {"label": "Bio-LNG (Medium) (Bio-LNG med.)", "value": "Bio-LNG med."},
+    {"label": "Bio-LNG (Slow) (Bio-LNG slow)", "value": "Bio-LNG slow"},
+    {"label": "Bio-LNG (Diesel) (Bio-LNG Diesel)", "value": "Bio-LNG Diesel"},
+    {"label": "Bio-LNG (LBSI) (Bio-LNG LBSI)", "value": "Bio-LNG LBSI"},
+    {"label": "Biomethanol (Bio-methanol)", "value": "Bio-methanol"},
+    {"label": "Other", "value": "Other"},
+    {"label": "Bio-Hydrogen (Bio-H2)", "value": "Bio-H2"},
+    {"label": "Electro-Diesel (e-diesel)", "value": "e-diesel"},
+    {"label": "Electro-Methanol (e-methanol)", "value": "e-methanol"},
+    {"label": "Electro-LNG (Medium) (e-LNG med.)", "value": "e-LNG med."},
+    {"label": "Electro-LNG (Slow) (e-LNG slow)", "value": "e-LNG slow"},
+    {"label": "Electro-LNG (Diesel) (e-LNG Diesel)", "value": "e-LNG Diesel"},
+    {"label": "Electro-LNG (LBSI) (e-LNG LBSI)", "value": "e-LNG LBSI"},
+    {"label": "Electro-Hydrogen (e-H2)", "value": "e-H2"},
+    {"label": "Electro-Ammonia (e-NH3)", "value": "e-NH3"},
+    {"label": "Electro-LPG (e-LPG)", "value": "e-LPG"},
+    {"label": "Electro-DME (e-DME)", "value": "e-DME"},
+    {"label": "Hydrogen", "value": "Hydrogen"},
+    {"label": "Full Electric (Full_Electric)", "value": "Full_Electric"},
+    {"label": "Methanol / MDO / e-Methanol Mix", "value": "Methanol MDO e-methanol"},
+    {"label": "Electricity (Natpower)", "value": "Electricity Natpower"},
+    {"label": "Diesel / Bio-Diesel Blend", "value": "Diesel-Bio-diesel"},
+    {"label": "Electricity (Grid)", "value": "Electricity"},
 ]
-# Currencies
+
+# Currencies with Conversion Rates (Consider dynamic fetching for production)
 CURRENCIES = {
     "EUR": {"symbol": "€", "conversion": 1.0},
     "USD": {"symbol": "$", "conversion": 1.07},
@@ -154,44 +159,15 @@ DRIVE_TRAIN_OPTION_LABELS = ["Direct Drive", "Diesel Electric", "Non Propelled"]
 OPERATIONAL_PROFILE_OPTIONS = ["Sailing", "Working", "Idle_moored", "COMBINATION"]
 OPERATIONAL_PROFILE_OPTION_LABELS = ["Sailing", "Working", "Idle / moored", "Combination"]
 
-# Extended fuel type options for ship fuel selection
+# Extended Fuel Type Options for Ship Fuel Selection
 FUEL_TYPE_OPTIONS_SHIP = [
-    "HFO",
-    "LFO",
-    "MDO",
-    "MGO",
-    "LNG med.",
-    "LNG slow",
-    "LNG Diesel",
-    "LNG LBSI",
-    "LPG",
-    "H2",
-    "NH3",
-    "Methanol",
-    "Ethanol",
-    "Bio-diesel",
-    "HVO",
-    "Bio-LNG med.",
-    "Bio-LNG slow",
-    "Bio-LNG Diesel",
-    "Bio-LNG LBSI",
-    "Bio-methanol",
-    "Other",
-    "Bio-H2",
-    "e-diesel",
-    "e-methanol",
-    "e-LNG med.",
-    "e-LNG slow",
-    "e-LNG Diesel",
-    "e-LNG LBSI",
-    "e-H2",
-    "e-NH3",
-    "e-LPG",
-    "e-DME",
-    "Electricity",
-    "Full_Electric",
-    "Methanol MDO e-methanol",
-    "Diesel-Bio-diesel"
+    "HFO", "LFO", "MDO", "MGO", "LNG med.", "LNG slow", "LNG Diesel", "LNG LBSI",
+    "LPG", "H2", "NH3", "Methanol", "Ethanol", "Bio-diesel", "HVO",
+    "Bio-LNG med.", "Bio-LNG slow", "Bio-LNG Diesel", "Bio-LNG LBSI",
+    "Bio-methanol", "Other", "Bio-H2", "e-diesel", "e-methanol",
+    "e-LNG med.", "e-LNG slow", "e-LNG Diesel", "e-LNG LBSI",
+    "e-H2", "e-NH3", "e-LPG", "e-DME", "Electricity", "Full_Electric",
+    "Methanol MDO e-methanol", "Diesel-Bio-diesel"
 ]
 
 ENGINE_SPEED_OPTIONS = ["High", "Medium", "Low"]
@@ -211,11 +187,11 @@ PREVENT_OPTION_LABELS = ["-"]
 CHANGE_OPTION_LABELS = ["-"]
 
 SHORE_POWER_SWITCHOVER_PHILOSOPHY_OPTIONS = ["Synchronization", "Blackout"]
-SOLAR_PV_DATE_OPTIONS = ["45281", "45006", "45098"]
+SOLAR_PV_DATE_OPTIONS = ["45281", "45006", "45098"]  # Serial dates; consider converting
 SOLAR_PV_DATE_OPTION_LABELS = ["21-Dec", "21-Mar", "21-Jun"]
 BATTERY_HYBRID_OPTIONS = ["Spinning reserve", "Peakshaving", "Hybrid sailing"]
 BIOFUELS_OPTIONS = ["HVO", "GTL", "Bio_HFO", "Bio_LNG"]
-HYDROGEN_PRESSURE_OPTIONS = ["200", "350", "700", "1,400", "liquid"]
+HYDROGEN_PRESSURE_OPTIONS = ["200", "350", "700", "1400", "liquid"]
 FULL_ELECTRIC_OPERATING_FREQUENCY = ["DC", "50", "60"]
 BATTERY_CHEMISTRY_OPTIONS = ["LFP", "NMC"]
 
@@ -241,13 +217,13 @@ COMPLIANCE_BENCHMARK_OPTION_LABELS = [
 ]
 COMPANIES_SCOPE_OPTIONS = ["Do not include", "Scope 1 and 2", "Scope 3"]
 
-# Additional Option for dual fuel engine installation
+# Additional Option for Dual Fuel Engine Installation
 DUAL_FUEL_ENGINE_INSTALLED = ["Yes", "No"]
 
-# wkhtmltopdf configuration for pdfkit (default path or from environment variable)
+# wkhtmltopdf Configuration for pdfkit
 WKHTMLTOPDF_PATH = os.getenv("WKHTMLTOPDF_PATH", r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
 
-# SMTP settings (should be set via environment variables in production)
+# SMTP Settings (Use environment variables in production)
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "your_email@example.com")

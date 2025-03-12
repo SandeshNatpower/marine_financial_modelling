@@ -2,6 +2,7 @@ import dash
 from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 from pages import input_module, output_module, power_profiles, reporting, database
+from callbacks import register_callbacks
 
 ###############################################################################
 # APP SETUP
@@ -10,7 +11,7 @@ app = dash.Dash(
     __name__,
     external_stylesheets=[dbc.themes.FLATLY],
     suppress_callback_exceptions=True, 
-    title = "NatPower Marine Financial Modelling"
+    title="NatPower Marine Financial Modelling"
 )
 
 # Layout color and sizing constants (Maritime-inspired)
@@ -211,7 +212,6 @@ def toggle_help_modal(n_open, n_close, is_open):
 ###############################################################################
 # REGISTER CALLBACKS FROM callbacks.py
 ###############################################################################
-from callbacks import register_callbacks
 register_callbacks(app)
 
 ###############################################################################

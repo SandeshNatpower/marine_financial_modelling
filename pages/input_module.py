@@ -1,26 +1,55 @@
-import json
-import requests
-from urllib.parse import urlencode
-from dash import html, dcc, no_update, Input, Output, State
+import dash
+from dash import html, dcc
 import dash_bootstrap_components as dbc
-import config
+import config  # Assumes a config module with FUEL_OPTIONS and DEFAULT_VESSEL
+import requests  # For making API calls
 
 ###############################################################################
 # GLOBAL CONSTANTS AND DEFAULTS
 ###############################################################################
 PRIMARY_COLOR = "#0A4B8C"
 TEXT_COLOR = "#212121"
-FUEL_OPTIONS = config.FUEL_OPTIONS
+FUEL_OPTIONS = config.FUEL_OPTIONS  # e.g., ["MDO", "Diesel-Bio-diesel", etc.]
 DEFAULT_VESSEL = config.DEFAULT_VESSEL
+
+# Default values aligned with API requirements
+DEFAULT_SAILING_DAYS = 199
+DEFAULT_WORKING_DAYS = 40
+DEFAULT_IDLE_DAYS = 126
+DEFAULT_SHORE_DAYS = 0
+DEFAULT_REPORTING_YEAR = 2030
+DEFAULT_FUELEU_CURRENT_PENALTY = 729348.5444
+DEFAULT_FUELEU_FUTURE_PENALTY = 0
+DEFAULT_PARASITIC_LOAD = 0.95
+DEFAULT_BIOFUELS_BLEND = 0.3
+DEFAULT_INFLATION_RATE = 0.02
+DEFAULT_NPV_RATE = 0
+DEFAULT_CAPEX = 19772750
+DEFAULT_MAIN_ENGINE_POWER = 38400
+DEFAULT_AUX_ENGINE_POWER = 2020
+DEFAULT_SAILING_ENGINE_LOAD = 0.5  # 50% in UI
+DEFAULT_WORKING_ENGINE_LOAD = 0.3  # 30% in UI
+DEFAULT_SHORE_ENGINE_LOAD = 0.395  # 39.5% in UI
+DEFAULT_SHORE_PORT = 1
+DEFAULT_MAIN_FUEL_TYPE = "MDO"
+DEFAULT_AUX_FUEL_TYPE = "MDO"
+DEFAULT_FUTURE_MAIN_FUEL_TYPE = "Diesel-Bio-diesel"
+DEFAULT_FUTURE_AUX_FUEL_TYPE = "Diesel-Bio-diesel"
+DEFAULT_ENGINE_MAINT_COST = 20
+DEFAULT_SPARES_COST = 2
+DEFAULT_SHORE_MAINT_COST = 45.486
+DEFAULT_SHORE_SPARES_COST = 45.486
+DEFAULT_BIOFUELS_SPARES_COST = 3
+DEFAULT_SHORE_ENABLE = False
 
 ###############################################################################
 # HELPER FOR CREATING INPUT GROUPS
 ###############################################################################
 def create_input_group(label, id, value=None, input_type='number', options=None,
-                       col_size=4, editable=True, info_text=None, units=None):
+                       col_size=4, editable=True, info_text=None, units=None,
+                       min_val=None, max_val=None):
     col_settings = {"md": col_size, "xs": 12}
     
-    # Create a label with an info icon if info_text is provided.
     label_contents = [label]
     if info_text:
         label_contents.append(
@@ -29,7 +58,6 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
         )
     label_component = dbc.Label(label_contents, style={"color": TEXT_COLOR})
     
-    # Build the input field
     if input_type == 'dropdown':
         opts = options if isinstance(options, list) and isinstance(options[0], dict) \
             else [{"label": opt, "value": opt} for opt in options] if options else []
@@ -41,11 +69,6 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
             disabled=not editable,
             style={"backgroundColor": "#e9ecef"} if not editable else {}
         )
-        if units:
-            input_field = html.Div([
-                input_field, 
-                html.Span(units, className="ml-1", style={"lineHeight": "38px"})
-            ])
     else:
         input_component = dbc.Input(
             id=id,
@@ -53,7 +76,9 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
             value=value,
             disabled=not editable,
             placeholder=str(value) if value is not None else "",
-            style={"backgroundColor": "#e9ecef"} if not editable else {}
+            style={"backgroundColor": "#e9ecef"} if not editable else {},
+            min=min_val,
+            max=max_val
         )
         if units:
             input_field = dbc.InputGroup([input_component, dbc.InputGroupText(units)])
@@ -61,11 +86,8 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
             input_field = input_component
 
     children = [label_component, input_field]
-    
     if info_text:
-        children.append(
-            dbc.Tooltip(info_text, target=f"{id}-info-icon", placement="top")
-        )
+        children.append(dbc.Tooltip(info_text, target=f"{id}-info-icon", placement="top"))
     
     return dbc.Col(children, **col_settings)
 
@@ -73,81 +95,82 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
 # VESSEL DETAILS FETCHER
 ###############################################################################
 def get_vessel_details(search_term, search_type='imo'):
-    url = config.VESSEL_ENDPOINT
+    """
+    Fetch vessel details using the provided search term and search type.
+    Uses the endpoint as defined in config without appending extra segments.
+    Correct API call example:
+    https://natpower-marine-api-dev.azurewebsites.net/marinedata/getvesseldetails_engine?imo=9419163&mmsi=9419163
+    """
+    url = "https://natpower-marine-api-dev.azurewebsites.net/marinedata/getvesseldetails_engine?"
     params = {"imo": search_term, "mmsi": search_term} if search_type == 'imo' else {"vesselname": search_term}
+    
     try:
         response = requests.get(url, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data and isinstance(data, list):
-                return data[0]
-            return DEFAULT_VESSEL
+        response.raise_for_status()
+        data = response.json()
+        # Return the first entry if data is a list; otherwise, fallback to the default vessel.
+        if isinstance(data, list) and data:
+            return data[0]
         else:
-            print("Error fetching vessel details:", response.status_code)
-            return DEFAULT_VESSEL
-    except Exception as e:
-        print("Exception fetching vessel details:", e)
-        return DEFAULT_VESSEL
+            return config.DEFAULT_VESSEL
+    except requests.RequestException as e:
+        print(f"Exception fetching vessel details: {e}")
+        return config.DEFAULT_VESSEL
+
 
 ###############################################################################
 # VESSEL IMAGE HANDLER
 ###############################################################################
 def get_vessel_image_path(vessel_type):
     """
-    Get the appropriate vessel image path based on vessel type.
-    If vessel_type is a dict, extract the string using a key (e.g., 'value').
+    Returns the correct image filename for a given vessel type.
+    If the vessel type isn't recognized, it returns 'default_vessel.png'.
     """
-    # Handle dict input by extracting the string value.
+    if not vessel_type:
+        return "default_vessel.png"
+
     if isinstance(vessel_type, dict):
         vessel_type = vessel_type.get('value', '')
-    
+
+    # Normalize the vessel type for case-insensitive matching
+    normalized_type = vessel_type.strip().upper()
+
     vessel_type_map = {
         'PASSENGER RO/RO': 'passenger_roro.png',
         'PASSENGER SHIP': 'passenger_ship.png',
         'CRUISE PASSENGER SHIP': 'cruise_ship.png',
         'RO/RO PASSENGER': 'roro_passenger.png',
         'FERRY': 'ferry.png',
-        'Ferry': 'ferry.png',
         'CONTAINER SHIP': 'container_ship.png',
-        'CONTAINER_SHIP': 'container_ship.png',
         'BULK CARRIER': 'bulk_carrier.png',
-        'BULK_CARRIER': 'bulk_carrier.png',
         'GENERAL CARGO': 'general_cargo.png',
-        'GENERAL_CARGO': 'general_cargo.png',
         'REFRIGERATED CARGO CARRIER': 'refrigerated_cargo.png',
-        'REFRIGERATED_CARGO_CARRIER': 'refrigerated_cargo.png',
         'TANKER': 'tanker.png',
         'CRUDE OIL TANKER': 'crude_oil_tanker.png',
         'CHEMICAL TANKER': 'chemical_tanker.png',
-        'GAS_CARRIER': 'gas_carrier.png',
-        'LNG_CARRIER': 'lng_carrier.png',
+        'GAS CARRIER': 'gas_carrier.png',
+        'LNG CARRIER': 'lng_carrier.png',
         'DREDGING': 'dredger.png',
         'FISHING': 'fishing_vessel.png',
         'OFFSHORE': 'offshore_vessel.png',
         'TUG': 'tug.png',
-        'PORT_AND_TUGS': 'tug.png',
+        'PORT AND TUGS': 'tug.png',
         'MISCELLANEOUS': 'general_vessel.png',
-        'COMBINATION_CARRIER': 'combination_carrier.png',
-        'INLAND_WATERWAYS': 'inland_vessel.png'
+        'COMBINATION CARRIER': 'combination_carrier.png',
+        'INLAND WATERWAYS': 'inland_vessel.png'
     }
-    
-    normalized_type = vessel_type.strip().upper() if vessel_type else ""
-    
+
     # Direct match
-    if vessel_type in vessel_type_map:
-        return vessel_type_map[vessel_type]
-    
-    # Normalized match
     if normalized_type in vessel_type_map:
         return vessel_type_map[normalized_type]
-    
-    # Partial matching
-    for key in vessel_type_map:
+
+    # Fuzzy matching (checks if part of any known key)
+    for key, image in vessel_type_map.items():
         if key in normalized_type or normalized_type in key:
-            return vessel_type_map[key]
-    
-    # Default image if no match found
-    return 'default_vessel.png'
+            return image
+
+    # Default fallback
+    return "default_vessel.png"
 
 ###############################################################################
 # INPUT MODULE LAYOUT
@@ -156,92 +179,70 @@ def layout():
     return html.Div([
         html.H1("Step 1: Vessel Details", className="mb-4", style={"color": PRIMARY_COLOR}),
         
-        # Vessel Search Section
+        # **Vessel Search Section**
         dbc.Card([
             dbc.CardHeader(
-                html.H4("Search for Vessel Data", style={"color": "white"}),
+                html.H4("Search for Vessel Data", style={"color": "white"}), 
                 style={"backgroundColor": PRIMARY_COLOR}
             ),
             dbc.CardBody([
                 dbc.Row([
-                    dbc.Col([
-                        dbc.Label("Search Type", style={"color": TEXT_COLOR}),
-                        dcc.Dropdown(
-                            id='search-type',
-                            options=[
-                                {'label': 'Vessel Name', 'value': 'name'},
-                                {'label': 'IMO/MMSI', 'value': 'imo'}
-                            ],
-                            value='imo'
-                        )
-                    ], md=3, xs=12),
-                    dbc.Col([
-                        dbc.Label("Search Term", style={"color": TEXT_COLOR}),
-                        dbc.Input(id='search-term', type='text')
-                    ], md=6, xs=12),
-                    dbc.Col([
-                        html.Br(),
-                        dbc.Button("Search", id='search-button', color='primary', className='mt-2')
-                    ], md=3, xs=12)
+                    create_input_group("Search Type", "search-type", "imo", "dropdown",
+                                       options=[{"label": "Vessel Name", "value": "name"},
+                                                {"label": "IMO/MMSI", "value": "imo"}],
+                                       col_size=3, info_text="Select how to search for the vessel"),
+                    create_input_group("Search Term", "search-term", None, "text", col_size=6,
+                                       info_text="Enter IMO, MMSI, or vessel name"),
+                    dbc.Col([html.Br(), dbc.Button("Search", id="search-button", color="primary", className="mt-2")], 
+                            md=3, xs=12)
                 ]),
-                html.Div(id='search-results')
+                html.Div(id="search-results")
             ])
-        ], className='mb-4', style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
-        
-        # Basic Vessel Information Section (with vessel image)
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
+
+        # **Basic Vessel Information Section**
         dbc.Card([
             dbc.CardHeader(
-                html.H4("Basic Vessel Information", style={"color": "white"}),
+                html.H4("Basic Vessel Information", style={"color": "white"}), 
                 style={"backgroundColor": PRIMARY_COLOR}
             ),
             dbc.CardBody([
                 dbc.Row([
-                    # Left Column: Vessel Image and Type
                     dbc.Col([
                         html.Div([
-                            html.Img(
-                                id='vessel-image',
-                                src='/assets/default_vessel.png',  # This can be updated dynamically using get_vessel_image_path
-                                style={
-                                    'width': '100%', 
-                                    'maxHeight': '200px', 
-                                    'objectFit': 'contain',
-                                    'borderRadius': '8px',
-                                    'boxShadow': '0 2px 10px rgba(0,0,0,0.1)'
-                                }
-                            ),
-                            html.Div(id='vessel-type-display', className='text-center mt-2')
-                        ], className='text-center')
+                            html.Img(id="vessel-image", src="/assets/default_vessel.png",
+                                     style={"width": "100%", "maxHeight": "200px", "objectFit": "contain",
+                                            "borderRadius": "8px", "boxShadow": "0 2px 10px rgba(0,0,0,0.1)"}),
+                            html.Div(id="vessel-type-display", className="text-center mt-2")
+                        ], className="text-center")
                     ], md=4, xs=12),
-                    
-                    # Right Column: Vessel Details
                     dbc.Col([
                         dbc.Row([
                             create_input_group("Vessel Name", "vessel-name", DEFAULT_VESSEL["vessel_name"],
-                                               'text', col_size=12, editable=False, info_text="Full vessel name")
+                                               "text", col_size=12, editable=False, info_text="Full vessel name")
                         ], className="mb-3"),
                         dbc.Row([
-                            create_input_group("IMO Number", "imo-number", DEFAULT_VESSEL["imo"],
-                                               'number', col_size=6, editable=False, info_text="IMO/MMSI number"),
+                            create_input_group("IMO Number", "imo-number", DEFAULT_VESSEL["imo"], "number", col_size=6,
+                                               editable=False, info_text="IMO/MMSI number"),
                             create_input_group("Vessel Category", "vessel-category", DEFAULT_VESSEL["vessel_category"],
-                                               'text', col_size=6, editable=False, info_text="Category of the vessel")
+                                               "text", col_size=6, editable=False, info_text="Category of the vessel")
                         ], className="mb-3"),
                         dbc.Row([
                             create_input_group("Gross Tonnage", "gross-tonnage", DEFAULT_VESSEL["gross_tonnage"],
-                                               'number', col_size=4, editable=False, info_text="Gross tonnage", units="GT"),
-                            create_input_group("Deadweight", "dwt", DEFAULT_VESSEL["dwt"],
-                                               'number', col_size=4, info_text="Deadweight (metric tons)", units="mT"),
-                            create_input_group("Year Built", "year-built", DEFAULT_VESSEL["year_built"],
-                                               'number', col_size=4, info_text="Year the vessel was built"),
-                            create_input_group("Reporting Year", "reporting-year", DEFAULT_VESSEL.get("reporting_year", 2030),
-                                               'number', col_size=4, info_text="Year for financial reporting")
+                                               "number", col_size=4, editable=False, info_text="Gross tonnage", units="GT"),
+                            create_input_group("Deadweight", "dwt", DEFAULT_VESSEL["dwt"], "number", col_size=4,
+                                               info_text="Deadweight tonnage", units="mT"),
+                            create_input_group("Year Built", "year-built", DEFAULT_VESSEL["year_built"], "number", col_size=4,
+                                               info_text="Year the vessel was built"),
+                            create_input_group("Reporting Year", "reporting-year", DEFAULT_REPORTING_YEAR, "number", col_size=4,
+                                               info_text="Year for financial reporting")
                         ], className="mb-3")
                     ], md=8, xs=12)
                 ])
             ])
-        ], className='mb-4', style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
-        
-        # Technical Specifications & Engine Info Section
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
+
+        # **Technical Specifications & Engine Info Section**
         dbc.Card([
             dbc.CardHeader(
                 html.H4("Technical Specs & Engine Info", style={"color": "white"}),
@@ -249,26 +250,25 @@ def layout():
             ),
             dbc.CardBody([
                 dbc.Row([
-                    create_input_group("Main Engine Power", "main-power", DEFAULT_VESSEL.get("main_engine_power_kw", 38400),
-                                       'number', info_text="Enter main engine power (kW)", units="kW"),
-                    create_input_group("Main Engine Type", "main-engine-type", DEFAULT_VESSEL["main_engine_type"],
-                                       'text', col_size=4, info_text="Type of main engine"),
-                    create_input_group("Main Fuel Type", "main-fuel-type", DEFAULT_VESSEL.get("main_fuel_type", "MDO"),
-                                       'dropdown', options=FUEL_OPTIONS, col_size=4, info_text="Select main fuel type")
+                    create_input_group("Main Engine Power", "main-power", DEFAULT_MAIN_ENGINE_POWER,
+                                       "number", info_text="Main engine power", units="kW"),
+                    create_input_group("Main Engine Type", "main-engine-type", DEFAULT_VESSEL.get("main_engine_type", "Unknown"),
+                                       "text", col_size=4, info_text="Type of main engine"),
+                    create_input_group("Main Fuel Type", "main-fuel-type", DEFAULT_MAIN_FUEL_TYPE,
+                                       "dropdown", options=FUEL_OPTIONS, col_size=4, info_text="Main fuel type")
                 ], className="mb-3"),
                 dbc.Row([
-                    # Updated auxiliary engine power default to 2020
-                    create_input_group("Auxiliary Engine Power", "aux-power", DEFAULT_VESSEL.get("aux_engine_power_kw", 2020),
-                                       'number', info_text="Enter auxiliary engine power (kW)", units="kW"),
-                    create_input_group("Auxiliary Engine Type", "aux-engine-type", DEFAULT_VESSEL["aux_engine_type"],
-                                       'text', col_size=4, info_text="Type of auxiliary engine"),
-                    create_input_group("Aux Fuel Type", "aux-fuel-type", DEFAULT_VESSEL.get("aux_fuel_type", "MDO"),
-                                       'dropdown', options=FUEL_OPTIONS, col_size=4, info_text="Select auxiliary fuel type")
+                    create_input_group("Auxiliary Engine Power", "aux-power", DEFAULT_AUX_ENGINE_POWER,
+                                       "number", info_text="Auxiliary engine power", units="kW"),
+                    create_input_group("Auxiliary Engine Type", "aux-engine-type", DEFAULT_VESSEL.get("aux_engine_type", "Unknown"),
+                                       "text", col_size=4, info_text="Type of auxiliary engine"),
+                    create_input_group("Aux Fuel Type", "aux-fuel-type", DEFAULT_AUX_FUEL_TYPE,
+                                       "dropdown", options=FUEL_OPTIONS, col_size=4, info_text="Auxiliary fuel type")
                 ])
             ])
-        ], className='mb-4', style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
-        
-        # Operational Profile Section
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
+
+        # **Operational Profile Section**
         dbc.Card([
             dbc.CardHeader(
                 html.H4("Operational Profile", style={"color": "white"}),
@@ -276,33 +276,33 @@ def layout():
             ),
             dbc.CardBody([
                 dbc.Row([
-                    create_input_group("Sailing Days/Year", "sailing-days", DEFAULT_VESSEL.get("sailing_days", 199),
-                                       'number', info_text="Number of sailing days per year", units="days"),
-                    create_input_group("Working Days/Year", "working-days", DEFAULT_VESSEL.get("working_days", 40),
-                                       'number', info_text="Number of working days per year", units="days"),
-                    create_input_group("Idle Days/Year", "idle-days", DEFAULT_VESSEL.get("idle_days", 126),
-                                       'number', info_text="Number of idle days per year", units="days"),
-                    create_input_group("Shore Days/Year", "shore-days", DEFAULT_VESSEL.get("shore_days", 0),
-                                       'number', info_text="Number of shore days per year", units="days")
+                    create_input_group("Sailing Days/Year", "sailing-days", DEFAULT_SAILING_DAYS, "number",
+                                       info_text="Days sailing per year (total must be 365)", units="days", min_val=0, max_val=365),
+                    create_input_group("Working Days/Year", "working-days", DEFAULT_WORKING_DAYS, "number",
+                                       info_text="Days working per year (total must be 365)", units="days", min_val=0, max_val=365),
+                    create_input_group("Idle Days/Year", "idle-days", DEFAULT_IDLE_DAYS, "number",
+                                       info_text="Days idle per year (total must be 365)", units="days", min_val=0, max_val=365),
+                    create_input_group("Shore Days/Year", "shore-days", DEFAULT_SHORE_DAYS, "number",
+                                       info_text="Days at shore per year (total must be 365)", units="days", min_val=0, max_val=365)
                 ], className="mb-3"),
                 dbc.Row([
-                    create_input_group("Shore Port", "shore-port", DEFAULT_VESSEL.get("shore_port", 1),
-                                       'number', col_size=4, info_text="Number of shore ports available"),
-                    create_input_group("Shore Enable", "shore-enable", "Yes" if DEFAULT_VESSEL.get("shore_enable", True) else "No",
-                                       'dropdown', options=["Yes", "No"], col_size=4, info_text="Enable or disable shore power")
+                    create_input_group("Shore Port", "shore-port", DEFAULT_SHORE_PORT, "number",
+                                       col_size=4, info_text="Number of shore ports"),
+                    create_input_group("Shore Enable", "shore-enable", "Yes" if DEFAULT_SHORE_ENABLE else "No",
+                                       "dropdown", options=["Yes", "No"], col_size=4, info_text="Enable shore power")
                 ], className="mb-3"),
                 dbc.Row([
-                    create_input_group("Sailing Engine Load", "sailing-engine-load", DEFAULT_VESSEL.get("sailing_engine_load", 0.5),
-                                       'number', info_text="Engine load during sailing (as decimal)"),
-                    create_input_group("Working Engine Load", "working-engine-load", DEFAULT_VESSEL.get("working_engine_load", 0.3),
-                                       'number', info_text="Engine load during working (as decimal)"),
-                    create_input_group("Shore Engine Load", "shore-engine-load", DEFAULT_VESSEL.get("shore_engine_load", 0.395),
-                                       'number', info_text="Engine load during shore power (as decimal)")
+                    create_input_group("Sailing Engine Load", "sailing-engine-load", DEFAULT_SAILING_ENGINE_LOAD * 100,
+                                       "number", info_text="Engine load during sailing (0-100%)", min_val=0, max_val=100, units="%"),
+                    create_input_group("Working Engine Load", "working-engine-load", DEFAULT_WORKING_ENGINE_LOAD * 100,
+                                       "number", info_text="Engine load during working (0-100%)", min_val=0, max_val=100, units="%"),
+                    create_input_group("Shore Engine Load", "shore-engine-load", DEFAULT_SHORE_ENGINE_LOAD * 100,
+                                       "number", info_text="Engine load at shore (0-100%)", min_val=0, max_val=100, units="%")
                 ])
             ])
-        ], className='mb-4', style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
-        
-        # Maintenance & Costs Section
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
+
+        # **Maintenance & Costs Section**
         dbc.Card([
             dbc.CardHeader(
                 html.H4("Maintenance & Costs", style={"color": "white"}),
@@ -310,20 +310,17 @@ def layout():
             ),
             dbc.CardBody([
                 dbc.Row([
-                    create_input_group("Engine Maintenance Cost", "engine-maint-cost",
-                                       DEFAULT_VESSEL.get("ENGINE_MAINTENANCE_COSTS_PER_HOUR", 20),
-                                       'number', info_text="Cost per engine hour", units="EUR/h"),
-                    create_input_group("Spares/Consumables Cost", "spares-cost",
-                                       DEFAULT_VESSEL.get("SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR", 2),
-                                       'number', info_text="Cost per engine hour", units="EUR/h"),
-                    create_input_group("FUELEU Current Penalty", "fueleu-penalty",
-                                       DEFAULT_VESSEL.get("FUELEU_CURRENT_PENALTY_PER_YEAR", 729348.5444),
-                                       'number', info_text="Annual penalty cost", units="EUR/yr")
-                ], className="mb-3")
+                    create_input_group("Engine Maintenance Cost", "engine-maint-cost", DEFAULT_ENGINE_MAINT_COST,
+                                       "number", info_text="Maintenance cost per engine hour", units="EUR/h", min_val=0),
+                    create_input_group("Spares/Consumables Cost", "spares-cost", DEFAULT_SPARES_COST,
+                                       "number", info_text="Spares cost per engine hour", units="EUR/h", min_val=0),
+                    create_input_group("FUELEU Current Penalty", "fueleu-penalty", DEFAULT_FUELEU_CURRENT_PENALTY,
+                                       "number", info_text="Current annual penalty", units="EUR/yr", min_val=0)
+                ])
             ])
-        ], className='mb-4', style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
-        
-        # Future Inputs & Fuel Blend Section (including new financial parameters)
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
+
+        # **Future Inputs & Fuel Blend Section**
         dbc.Card([
             dbc.CardHeader(
                 html.H4("Future Inputs & Fuel Blend", style={"color": "white"}),
@@ -331,58 +328,47 @@ def layout():
             ),
             dbc.CardBody([
                 dbc.Row([
-                    create_input_group("Future Main Fuel Type", "future-main-fuel-type",
-                                       DEFAULT_VESSEL.get("future_main_fuel_type", "Diesel-Bio-diesel"),
-                                       'dropdown', options=FUEL_OPTIONS, col_size=4,
-                                       info_text="Select future main fuel type"),
-                    create_input_group("Future Aux Fuel Type", "future-aux-fuel-type",
-                                       DEFAULT_VESSEL.get("future_aux_fuel_type", "Diesel-Bio-diesel"),
-                                       'dropdown', options=FUEL_OPTIONS, col_size=4,
-                                       info_text="Select future auxiliary fuel type")
+                    create_input_group("Future Main Fuel Type", "future-main-fuel-type", DEFAULT_FUTURE_MAIN_FUEL_TYPE,
+                                       "dropdown", options=FUEL_OPTIONS, col_size=4, info_text="Future main fuel type"),
+                    create_input_group("Future Aux Fuel Type", "future-aux-fuel-type", DEFAULT_FUTURE_AUX_FUEL_TYPE,
+                                       "dropdown", options=FUEL_OPTIONS, col_size=4, info_text="Future auxiliary fuel type")
                 ], className="mb-3"),
                 dbc.Row([
-                    # Updated default for future penalty to 0 to match API sample
-                    create_input_group("FUELEU Future Penalty", "fueleu-future-penalty",
-                                       DEFAULT_VESSEL.get("FUELEU_FUTURE_PENALTY_PER_YEAR", 0),
-                                       'number', info_text="Annual future penalty cost", units="EUR/yr"),
-                    create_input_group("Biofuels Spares Cost", "biofuels-spares-cost",
-                                       DEFAULT_VESSEL.get("BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR", 3),
-                                       'number', info_text="Cost per engine hour", units="EUR/h")
+                    create_input_group("FUELEU Future Penalty", "fueleu-future-penalty", DEFAULT_FUELEU_FUTURE_PENALTY,
+                                       "number", info_text="Future annual penalty", units="EUR/yr", min_val=0),
+                    create_input_group("Biofuels Spares Cost", "biofuels-spares-cost", DEFAULT_BIOFUELS_SPARES_COST,
+                                       "number", info_text="Biofuels spares cost per engine hour", units="EUR/h", min_val=0)
                 ], className="mb-3"),
                 dbc.Row([
-                    create_input_group("Shore Power Maintenance/Day", "shore-maint-cost",
-                                       DEFAULT_VESSEL.get("SHORE_POWER_MAINTENANCE_PER_DAY", 45.486),
-                                       'number', info_text="Daily maintenance cost", units="EUR/day"),
-                    create_input_group("Shore Power Spares/Day", "shore-spares-cost",
-                                       DEFAULT_VESSEL.get("SHORE_POWER_SPARES_PER_DAY", 45.486),
-                                       'number', info_text="Daily spares cost", units="EUR/day")
+                    create_input_group("Shore Power Maintenance/Day", "shore-maint-cost", DEFAULT_SHORE_MAINT_COST,
+                                       "number", info_text="Daily shore power maintenance cost", units="EUR/day", min_val=0),
+                    create_input_group("Shore Power Spares/Day", "shore-spares-cost", DEFAULT_SHORE_SPARES_COST,
+                                       "number", info_text="Daily shore power spares cost", units="EUR/day", min_val=0)
                 ], className="mb-3"),
                 dbc.Row([
-                    create_input_group("Parasitic Load Engine", "parasitic-load",
-                                       DEFAULT_VESSEL.get("PARASITIC_LOAD_ENGINE", 0.95),
-                                       'number', info_text="Enter parasitic load factor"),
-                    create_input_group("Biofuels Blend (%)", "biofuels-blend",
-                                       DEFAULT_VESSEL.get("BIOFUELS_BLEND_PERCENTAGE", 0.3),
-                                       'number', info_text="Enter biofuels blend percentage", units="%")
+                    create_input_group("Parasitic Load Engine", "parasitic-load", DEFAULT_PARASITIC_LOAD,
+                                       "number", info_text="Parasitic load factor (0-1)", min_val=0, max_val=1),
+                    create_input_group("Biofuels Blend (%)", "biofuels-blend", DEFAULT_BIOFUELS_BLEND * 100,
+                                       "number", info_text="Biofuels blend percentage (0-100)", units="%", min_val=0, max_val=100)
                 ], className="mb-3"),
                 dbc.Row([
-                    create_input_group("Inflation Rate", "inflation-rate", 2.0, 'number',
-                                       info_text="Annual inflation rate (%)", units="%")
+                    create_input_group("Inflation Rate", "inflation-rate", DEFAULT_INFLATION_RATE * 100,
+                                       "number", info_text="Annual inflation rate (0-100)", units="%", min_val=0),
+                    create_input_group("NPV Rate", "npv-rate", DEFAULT_NPV_RATE * 100,
+                                       "number", info_text="Net present value discount rate (0-100)", units="%", min_val=0)
                 ], className="mb-3"),
-                # New row for additional financial parameters:
                 dbc.Row([
-                    create_input_group("NPV Rate", "npv-rate", 0, 'number',
-                                       info_text="Net present value discount rate", units="%"),
-                    create_input_group("CAPEX", "capex", 19772750, 'number',
-                                       info_text="Capital expenditure", units="EUR")
+                    create_input_group("CAPEX", "capex", DEFAULT_CAPEX, "number",
+                                       info_text="Capital expenditure", units="EUR", min_val=0)
                 ], className="mb-3")
             ])
-        ], className='mb-4', style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
-        
-        # Calculation Button
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
+
+        # **Calculate Button and Status**
         dbc.Button("Calculate Emissions & Costs", id="calculate-button", color="primary", className="mt-3"),
-        
-        # Debug Information Section (hidden by default)
+        html.Div(id="calculation-status", className="mt-3", style={"color": TEXT_COLOR}),
+
+        # **Debugging Section**
         html.Div([
             dbc.Card([
                 dbc.CardHeader(
@@ -394,8 +380,7 @@ def layout():
                         html.P("This section shows technical details about the calculation process.", className="text-muted"),
                         html.Div(id="debug-info")
                     ]),
-                    id="debug-collapse",
-                    is_open=False
+                    id="debug-collapse", is_open=False
                 )
             ])
         ], className="mt-3 mb-5", id="debug-section", style={"display": "block"})
