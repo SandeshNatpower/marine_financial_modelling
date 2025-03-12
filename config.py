@@ -33,7 +33,7 @@ DEFAULT_VESSEL = {
     "working_days": 40,  # Days per year
     "idle_days": 126,  # Days per year
     "shore_days": 0,  # Days per year
-    "shore_port": 1,  # Number of ports with shore power capability
+    "shore_port": 2,  # Number of ports with shore power capability
     "main_fuel_type": "MDO",
     "aux_fuel_type": "MDO",
     "future_main_fuel_type": "Diesel-Bio-diesel",
