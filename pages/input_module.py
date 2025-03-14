@@ -179,7 +179,7 @@ def layout():
         # Hidden store to keep vessel data across callbacks
         dcc.Store(id='vessel-data-store'),
         
-        html.H1("Step 1: Vessel Details", className="mb-4", style={"color": PRIMARY_COLOR}),
+        html.H1("Step 1: Vessel Details (version 1.1)", className="mb-4", style={"color": PRIMARY_COLOR}),
         
         # Vessel Search Section
         dbc.Card([
