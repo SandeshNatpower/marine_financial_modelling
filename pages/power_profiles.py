@@ -6,6 +6,8 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import numpy as np
 import config
+import requests
+from urllib.parse import urlencode
 
 # =============================================================================
 # GLOBAL STYLES & CONSTANTS
@@ -56,22 +58,21 @@ def process_financial_results(api_data):
         })
     return processed
 
-def load_totex_scenarios():
-    # Normally this would fetch API data.
-    # For demonstration, we use dummy data.
-    data = {}  # Replace with actual API call
-    current_ts = data.get("current_timeseries", [])
-    future_ts = data.get("future_timeseries", [])
-    if not current_ts or not future_ts:
+def load_totex_scenarios(api_data=None):
+    if api_data is None:
         years = list(range(2025, 2051))
         scenarios = {
-            "Current": {"OPEX": [0]*len(years), "Penalty": [0]*len(years), "Fuel": [0]*len(years),
-                        "Maintenance": [0]*len(years), "SPARES": [0]*len(years)},
-            "Future": {"OPEX": [0]*len(years), "Penalty": [0]*len(years), "Fuel": [0]*len(years),
-                       "Maintenance": [0]*len(years), "SPARES": [0]*len(years)}
+            "Current": {"OPEX": [0]*len(years), "Penalty": [0]*len(years),
+                        "Fuel": [0]*len(years), "Maintenance": [0]*len(years),
+                        "SPARES": [0]*len(years)},
+            "Future": {"OPEX": [0]*len(years), "Penalty": [0]*len(years),
+                       "Fuel": [0]*len(years), "Maintenance": [0]*len(years),
+                       "SPARES": [0]*len(years)}
         }
         return years, scenarios
 
+    current_ts = api_data.get("current_timeseries", [])
+    future_ts = api_data.get("future_timeseries", [])
     years = [entry.get("year") for entry in current_ts]
     scenarios = {
         "Current": {
@@ -82,11 +83,11 @@ def load_totex_scenarios():
             "SPARES": [entry.get("total_spare_current_inflated", 0) for entry in current_ts]
         },
         "Future": {
-            "OPEX": [entry.get("future_opex", 0) for entry in future_ts],
-            "Penalty": [entry.get("future_penalty", 0) for entry in future_ts],
-            "Fuel": [abs(entry.get("total_fuel_future_inflated", 0)) for entry in future_ts],
-            "Maintenance": [entry.get("total_maintenance_future_inflated", 0) for entry in future_ts],
-            "SPARES": [entry.get("total_spare_current_inflated", 0) for entry in current_ts]
+            "OPEX": [entry.get("future_opex", 0) for entry in api_data.get("future_timeseries", [])],
+            "Penalty": [entry.get("future_penalty", 0) for entry in api_data.get("future_timeseries", [])],
+            "Fuel": [abs(entry.get("total_fuel_future_inflated", 0)) for entry in api_data.get("future_timeseries", [])],
+            "Maintenance": [entry.get("total_maintenance_future_inflated", 0) for entry in api_data.get("future_timeseries", [])],
+            "SPARES": [entry.get("total_spare_future_inflated", 0) for entry in api_data.get("future_timeseries", [])]
         }
     }
     return years, scenarios
@@ -102,16 +103,26 @@ def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     )
     return fig
 
-def cashflow_figure():
-    # Dummy implementation for a combined bar and line chart.
+# -----------------------------
+# FIGURE FUNCTIONS (Accept dynamic API data)
+# -----------------------------
+def cashflow_figure(api_data=None):
+    if api_data is None:
+        # Return a placeholder figure (to be updated by callbacks)
+        fig = go.Figure().update_layout(title="No Data Available")
+        return set_figure_layout(fig, "Cumulative Savings vs. NPV", "Year", "Amount (£)")
+    results = api_data.get("result", [])
+    years = [res["year"] for res in results]
+    cumulative = [res["cumulative"] for res in results]
+    npv = [res["npv"] for res in results]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=[2025, 2026, 2027], y=[1000, 2000, 3000], name="Cumulative Savings", marker_color="blue"))
-    fig.add_trace(go.Scatter(x=[2025, 2026, 2027], y=[1500, 2500, 3500], mode="lines+markers", name="NPV",
+    fig.add_trace(go.Bar(x=years, y=cumulative, name="Cumulative Savings", marker_color="blue"))
+    fig.add_trace(go.Scatter(x=years, y=npv, mode="lines+markers", name="NPV",
                              line=dict(color="black", width=2), marker=dict(size=6)))
     return set_figure_layout(fig, "Cumulative Savings vs. NPV", "Year", "Amount (£)")
 
-def totex_figure():
-    years, scenarios = load_totex_scenarios()
+def totex_figure(api_data=None):
+    years, scenarios = load_totex_scenarios(api_data)
     current_cum = np.cumsum(scenarios["Current"]["OPEX"]).tolist()
     future_cum = np.cumsum(scenarios["Future"]["OPEX"]).tolist()
     fig = go.Figure(data=[
@@ -120,39 +131,61 @@ def totex_figure():
     ])
     return set_figure_layout(fig, "Cumulative OPEX Comparison", "Year", "Cumulative OPEX (£)")
 
-def engine_power_profile_figure():
+def engine_power_profile_figure(api_data=None):
+    if api_data is None:
+        fig = go.Figure().update_layout(title="No Data Available")
+        return set_figure_layout(fig, "Engine Power Profile (kW)", "Operating Mode", "Power (kW)")
+    current_power = api_data["current_table"]["enginge_power"][0]
+    future_power = api_data["future_output_table"]["enginge_power"][0]
+    modes = ["Idle", "Sailing", "Working"]
+    current_values = [current_power["idle_power"], current_power["sailing_power"], current_power["working_power"]]
+    future_values = [future_power["idle_power"], future_power["sailing_power"], future_power["working_power"]]
     fig = go.Figure(data=[
-        go.Bar(name="Current", x=["Idle", "Sailing", "Working"], y=[0, 0, 0], marker_color="blue"),
-        go.Bar(name="Future", x=["Idle", "Sailing", "Working"], y=[0, 0, 0], marker_color="orange")
+        go.Bar(name="Current", x=modes, y=current_values, marker_color="blue"),
+        go.Bar(name="Future", x=modes, y=future_values, marker_color="orange")
     ])
     return set_figure_layout(fig, "Engine Power Profile (kW)", "Operating Mode", "Power (kW)")
 
-def energy_demand_figure():
+def energy_demand_figure(api_data=None):
+    if api_data is None:
+        fig = go.Figure().update_layout(title="No Data Available")
+        return set_figure_layout(fig, "Daily Energy Demand Comparison", "", "Energy (kWh)")
+    current_table = api_data["current_table"]
+    future_table = api_data["future_output_table"]
+    current_energy = current_table["power_calc_day"][0]["power_req_day"]
+    future_days = future_table["working_days"][0]
+    future_power_calc = future_table["power_calc_day"][0]
+    sailing_days = future_days["sailing_days"]
+    working_days = future_days["working_days"]
+    idle_days = future_days["idle_days"]
+    shore_days = future_days.get("adjusted_shore_days", 0)
+    sailing_energy = future_power_calc["sailing_eneregy_req_kwh_day"]
+    working_energy = future_power_calc["working_eneregy_req_kwh_day"]
+    idle_energy = future_power_calc["idle_eneregy_req_kwh_day"]
+    shore_energy = future_power_calc.get("shore_power_req_day", 0)
+    total_energy = (sailing_days * sailing_energy + working_days * working_energy +
+                    idle_days * idle_energy + shore_days * shore_energy)
+    future_energy = total_energy / 365 if total_energy else current_energy
     fig = go.Figure(data=[
-        go.Bar(name="Current", x=["Total Daily Energy (kWh)"], y=[0], marker_color="blue"),
-        go.Bar(name="Future", x=["Total Daily Energy (kWh)"], y=[0], marker_color="orange")
+        go.Bar(name="Current", x=["Total Daily Energy (kWh)"], y=[current_energy], marker_color="blue"),
+        go.Bar(name="Future", x=["Total Daily Energy (kWh)"], y=[future_energy], marker_color="orange")
     ])
     return set_figure_layout(fig, "Daily Energy Demand Comparison", "", "Energy (kWh)")
 
-def spares_figure():
-    years, scenarios = load_totex_scenarios()
+def spares_figure(api_data=None):
+    if api_data is None:
+        fig = go.Figure().update_layout(title="No Data Available")
+        return set_figure_layout(fig, "Spares Cost Comparison", "Year", "Spares Cost (£)")
+    current_ts = api_data["current_timeseries"]
+    future_ts = api_data.get("future_timeseries", [])
+    years = [ts["year"] for ts in current_ts]
+    current_spares = [ts["total_spare_current_inflated"] for ts in current_ts]
+    future_spares = [ts["total_spare_future_inflated"] for ts in future_ts]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=years,
-        y=scenarios["Current"].get("SPARES", [0]*len(years)),
-        mode="lines+markers",
-        name="Current Spares",
-        line=dict(color="blue", width=2),
-        marker=dict(size=6)
-    ))
-    fig.add_trace(go.Scatter(
-        x=years,
-        y=scenarios["Future"].get("SPARES", [0]*len(years)),
-        mode="lines+markers",
-        name="Future Spares",
-        line=dict(color="orange", width=2),
-        marker=dict(size=6)
-    ))
+    fig.add_trace(go.Scatter(x=years, y=current_spares, mode="lines+markers", name="Current Spares",
+                             line=dict(color="blue", width=2), marker=dict(size=6)))
+    fig.add_trace(go.Scatter(x=years, y=future_spares, mode="lines+markers", name="Future Spares",
+                             line=dict(color="orange", width=2), marker=dict(size=6)))
     return set_figure_layout(fig, "Spares Cost Comparison", "Year", "Spares Cost (£)")
 
 def timeseries_field_comparison(processed_data, field_current, field_future, title, yaxis_title):
@@ -165,30 +198,43 @@ def timeseries_field_comparison(processed_data, field_current, field_future, tit
     ])
     return set_figure_layout(fig, title, "Year", yaxis_title)
 
-def opex_comparison_figure():
-    data = {}  # Replace with actual API data
-    processed = process_financial_results(data)
+def opex_comparison_figure(api_data=None):
+    if api_data is None:
+        return timeseries_field_comparison([], "current_opex", "future_opex", "OPEX Comparison", "OPEX (£)")
+    processed = process_financial_results(api_data)
     return timeseries_field_comparison(processed, "current_opex", "future_opex", "OPEX Comparison", "OPEX (£)")
 
-def penalty_comparison_figure():
-    data = {}
-    processed = process_financial_results(data)
+def penalty_comparison_figure(api_data=None):
+    if api_data is None:
+        return timeseries_field_comparison([], "current_penalty", "future_penalty", "Penalty Comparison", "Penalty (£)")
+    processed = process_financial_results(api_data)
     return timeseries_field_comparison(processed, "current_penalty", "future_penalty", "Penalty Comparison", "Penalty (£)")
 
-def fuel_comparison_figure():
-    data = {}
-    processed = process_financial_results(data)
+def fuel_comparison_figure(api_data=None):
+    if api_data is None:
+        return timeseries_field_comparison([], "fuel_current", "fuel_future", "Fuel Cost Comparison", "Fuel Cost (£)")
+    processed = process_financial_results(api_data)
     return timeseries_field_comparison(processed, "fuel_current", "fuel_future", "Fuel Cost Comparison", "Fuel Cost (£)")
 
-def maintenance_comparison_figure():
-    data = {}
-    processed = process_financial_results(data)
+def maintenance_comparison_figure(api_data=None):
+    if api_data is None:
+        return timeseries_field_comparison([], "maintenance_current", "maintenance_future", "Maintenance Cost Comparison", "Maintenance (£)")
+    processed = process_financial_results(api_data)
     return timeseries_field_comparison(processed, "maintenance_current", "maintenance_future", "Maintenance Cost Comparison", "Maintenance (£)")
 
-def dwelling_at_berth_pie_figure():
-    # Dummy pie chart for cost breakdown.
+def dwelling_at_berth_pie_figure(api_data=None):
+    if api_data is None:
+        fig = go.Figure().update_layout(title="No Data Available")
+        return set_figure_layout(fig, "Cost Breakdown for Current Scenario (2030)")
+    current_ts = api_data["current_timeseries"]
+    year_data = next((ts for ts in current_ts if ts["year"] == 2030), {})
     labels = ["Fuel", "Maintenance", "Spares", "Penalty"]
-    values = [100, 200, 50, 75]
+    values = [
+        year_data.get("total_fuel_current_inflated", 0),
+        year_data.get("total_maintenance_current_inflated", 0),
+        year_data.get("total_spare_current_inflated", 0),
+        year_data.get("current_penalty", 0)
+    ]
     fig = go.Figure([go.Pie(labels=labels, values=values, hoverinfo="label+percent", textinfo="label+percent")])
     return set_figure_layout(fig, "Cost Breakdown for Current Scenario (2030)")
 
@@ -201,7 +247,7 @@ def financial_metrics_layout():
         {"label": "Future Scenario", "value": "Future"}
     ]
     default_scenarios = ["Current", "Future"]
-    years_data, _ = load_totex_scenarios()
+    years_data, _ = load_totex_scenarios()  # Used for slider marks, etc.
     return dbc.Card([
         dbc.CardHeader(
             html.H4("TOTEX & Financial Metrics Comparison (2025–2050)", className="card-title", style=HEADER_TEXT_STYLE),
@@ -243,12 +289,13 @@ def financial_metrics_layout():
                 ], md=4, xs=12)
             ]),
             html.Br(),
-            dcc.Graph(id="metric-comparison-chart", className="chart-container"),
+            # Set empty figures; callbacks will update these.
+            dcc.Graph(id="metric-comparison-chart", figure={}, className="chart-container"),
             html.Hr(),
             dbc.Row([
                 dbc.Col(card_component(
                     "Cost Breakdown for Current Scenario (2030)",
-                    dcc.Graph(figure=dwelling_at_berth_pie_figure(), className="chart-container")
+                    dcc.Graph(id="dwelling-pie-chart", figure={}, className="chart-container")
                 ), md=12, xs=12)
             ]),
         ])
@@ -260,7 +307,7 @@ def power_demand_layout():
         dbc.Row([
             dbc.Col(
                 card_component("Load Profile Configuration (Synthetic)", [
-                    dcc.Graph(id="detail-power-profile-chart", className="chart-container"),
+                    dcc.Graph(id="detail-power-profile-chart", figure={}, className="chart-container"),
                     dbc.Row([
                         dbc.Col([
                             dbc.Label("Peak Power Demand (kW)"),
@@ -302,35 +349,35 @@ def power_demand_layout():
         dbc.Row([
             dbc.Col(card_component(
                 "Projected Energy Demand Over Time (Synthetic Example)",
-                dcc.Graph(id="energy-demand-chart", className="chart-container")
+                dcc.Graph(id="energy-demand-chart", figure={}, className="chart-container")
             ), xs=12)
         ]),
         html.Br(),
         dbc.Row([
             dbc.Col(card_component(
                 "Cashflow Analysis (API-based)",
-                dcc.Graph(id="cashflow-chart", figure=cashflow_figure(), className="chart-container")
+                dcc.Graph(id="cashflow-chart", figure={}, className="chart-container")
             ), xs=12)
         ]),
         html.Br(),
         dbc.Row([
             dbc.Col(card_component(
                 "TOTEX Comparison (API-based)",
-                dcc.Graph(id="totex-chart", figure=totex_figure(), className="chart-container")
+                dcc.Graph(id="totex-chart", figure={}, className="chart-container")
             ), xs=12)
         ]),
         html.Br(),
         dbc.Row([
             dbc.Col(card_component(
                 "Daily Energy Demand (API-based)",
-                dcc.Graph(figure=energy_demand_figure(), className="chart-container")
+                dcc.Graph(id="daily-energy-chart", figure={}, className="chart-container")
             ), xs=12)
         ]),
         html.Br(),
         dbc.Row([
             dbc.Col(card_component(
                 "Spares Cost Comparison (API-based)",
-                dcc.Graph(figure=spares_figure(), className="chart-container")
+                dcc.Graph(id="spares-chart", figure={}, className="chart-container")
             ), xs=12)
         ]),
         html.Br(),
@@ -338,10 +385,10 @@ def power_demand_layout():
             dbc.Col(card_component(
                 "Timeseries Comparisons",
                 html.Div([
-                    dcc.Graph(figure=opex_comparison_figure(), className="chart-container"),
-                    dcc.Graph(figure=penalty_comparison_figure(), className="chart-container"),
-                    dcc.Graph(figure=fuel_comparison_figure(), className="chart-container"),
-                    dcc.Graph(figure=maintenance_comparison_figure(), className="chart-container")
+                    dcc.Graph(id="opex-chart", figure={}, className="chart-container"),
+                    dcc.Graph(id="penalty-chart", figure={}, className="chart-container"),
+                    dcc.Graph(id="fuel-chart", figure={}, className="chart-container"),
+                    dcc.Graph(id="maintenance-chart", figure={}, className="chart-container")
                 ])
             ), xs=12)
         ])
