@@ -2,7 +2,7 @@ import dash
 from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 from pages import input_module, output_module, power_profiles, reporting, database
-from callbacks import register_callbacks
+
 
 ###############################################################################
 # APP SETUP
@@ -66,15 +66,12 @@ def get_sidebar():
         vertical=True,
         pills=True
     )
-    # Logo Section with maritime icon
     logo_section = html.Div([
         html.Img(src="/assets/Natpower_Marine.png", style={"width": "200px", "marginBottom": "1rem"})
     ])
-
-    # Help button to trigger modal
     help_button = html.Div(
         html.Button("Need Help?", id="help-button", className="btn btn-outline-light btn-sm w-100",
-                    style={"marginTop": "1rem"}),
+                    style={"marginTop": "1rem"})
     )
     info_note = html.Div(
         [
@@ -84,14 +81,9 @@ def get_sidebar():
         style={"marginTop": "2rem", "fontSize": "14px", "color": "#bdc3c7", "display": "flex", "alignItems": "center"}
     )
     return html.Div(
-        [
-            logo_section,
-            html.Hr(style={"backgroundColor": "rgba(255,255,255,0.2)", "margin": "1rem 0"}),
-            nav_links,
-            html.Hr(style={"backgroundColor": "rgba(255,255,255,0.2)", "margin": "1rem 0"}),
-            info_note,
-            help_button
-        ],
+        [logo_section, html.Hr(style={"backgroundColor": "rgba(255,255,255,0.2)", "margin": "1rem 0"}),
+         nav_links, html.Hr(style={"backgroundColor": "rgba(255,255,255,0.2)", "margin": "1rem 0"}),
+         info_note, help_button],
         style=sidebar_style
     )
 
@@ -109,7 +101,6 @@ def get_content():
     return html.Div(
         [
             dcc.Location(id="url", refresh=False),
-            # Header can be enhanced further if needed
             html.Div(id="page-header", style={"marginBottom": "1rem"}),
             dbc.Breadcrumb(
                 id="breadcrumb",
@@ -130,14 +121,14 @@ def get_content():
 # MAIN LAYOUT
 ###############################################################################
 app.layout = html.Div([
-    # Shared data stores available on every page
-    dcc.Store(id='vessel-data-store'),
-    dcc.Store(id='emissions-data-store'),
-    dcc.Store(id='tab-switch'),
+    # Add the missing store for financial data so that callbacks using "financial-data-store" work.
+    dcc.Store(id="vessel-data-store"),
+    dcc.Store(id="emissions-data-store"),
+    dcc.Store(id="financial-data-store", storage_type="session"),
+    dcc.Store(id="tab-switch"),
     html.Link(rel="stylesheet", href="https://use.fontawesome.com/releases/v5.15.4/css/all.css"),
     get_sidebar(),
     get_content(),
-    # Help Modal (hidden by default)
     dbc.Modal(
         [
             dbc.ModalHeader("Help & Support"),
@@ -193,7 +184,6 @@ def display_page(pathname):
     elif pathname == "/database":
         return database.layout()
     else:
-        # Default page, can be replaced with a custom 404 page if desired
         return input_module.layout()
 
 ###############################################################################
@@ -210,15 +200,13 @@ def toggle_help_modal(n_open, n_close, is_open):
     return is_open
 
 ###############################################################################
-# REGISTER CALLBACKS FROM callbacks.py
+# REGISTER CALLBACKS FROM `callbacks.py` (Placed here to prevent circular imports)
 ###############################################################################
+from callbacks import register_callbacks
 register_callbacks(app)
 
 ###############################################################################
 # RUN SERVER
 ###############################################################################
-# Important: Export the underlying Flask server
-server = app.server
-
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", port=8050, debug=True, use_reloader=False)
+    app.run_server(debug=True, host="0.0.0.0", port=8050, use_reloader=False)
