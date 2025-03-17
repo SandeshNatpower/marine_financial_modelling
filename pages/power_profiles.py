@@ -1,5 +1,3 @@
-# pages/power_profiles.py
-
 import dash
 from dash import html, dcc
 import dash_bootstrap_components as dbc
@@ -59,7 +57,8 @@ def process_financial_results(api_data):
     return processed
 
 def load_totex_scenarios(api_data=None):
-    if api_data is None:
+    # If API data is not provided or lacks the required keys, return default values.
+    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         years = list(range(2025, 2051))
         scenarios = {
             "Current": {"OPEX": [0]*len(years), "Penalty": [0]*len(years),
@@ -83,11 +82,11 @@ def load_totex_scenarios(api_data=None):
             "SPARES": [entry.get("total_spare_current_inflated", 0) for entry in current_ts]
         },
         "Future": {
-            "OPEX": [entry.get("future_opex", 0) for entry in api_data.get("future_timeseries", [])],
-            "Penalty": [entry.get("future_penalty", 0) for entry in api_data.get("future_timeseries", [])],
-            "Fuel": [abs(entry.get("total_fuel_future_inflated", 0)) for entry in api_data.get("future_timeseries", [])],
-            "Maintenance": [entry.get("total_maintenance_future_inflated", 0) for entry in api_data.get("future_timeseries", [])],
-            "SPARES": [entry.get("total_spare_future_inflated", 0) for entry in api_data.get("future_timeseries", [])]
+            "OPEX": [entry.get("future_opex", 0) for entry in future_ts],
+            "Penalty": [entry.get("future_penalty", 0) for entry in future_ts],
+            "Fuel": [abs(entry.get("total_fuel_future_inflated", 0)) for entry in future_ts],
+            "Maintenance": [entry.get("total_maintenance_future_inflated", 0) for entry in future_ts],
+            "SPARES": [entry.get("total_spare_future_inflated", 0) for entry in future_ts]
         }
     }
     return years, scenarios
@@ -108,17 +107,19 @@ def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
 # -----------------------------
 def cashflow_figure(api_data=None):
     if api_data is None:
-        # Return a placeholder figure (to be updated by callbacks)
         fig = go.Figure().update_layout(title="No Data Available")
         return set_figure_layout(fig, "Cumulative Savings vs. NPV", "Year", "Amount (£)")
     results = api_data.get("result", [])
     years = [res["year"] for res in results]
     cumulative = [res["cumulative"] for res in results]
     npv = [res["npv"] for res in results]
+    result = [res["result"] for res in results]
     fig = go.Figure()
     fig.add_trace(go.Bar(x=years, y=cumulative, name="Cumulative Savings", marker_color="blue"))
     fig.add_trace(go.Scatter(x=years, y=npv, mode="lines+markers", name="NPV",
                              line=dict(color="black", width=2), marker=dict(size=6)))
+    fig.add_trace(go.Scatter(x=years, y=result, mode="lines+markers", name="Yearly Result",
+                             line=dict(color="red", width=2), marker=dict(size=6)))         
     return set_figure_layout(fig, "Cumulative Savings vs. NPV", "Year", "Amount (£)")
 
 def totex_figure(api_data=None):
@@ -250,7 +251,7 @@ def financial_metrics_layout():
     years_data, _ = load_totex_scenarios()  # Used for slider marks, etc.
     return dbc.Card([
         dbc.CardHeader(
-            html.H4("TOTEX & Financial Metrics Comparison (2025–2050)", className="card-title", style=HEADER_TEXT_STYLE),
+            html.H4("TOTEX & Financial Metrics Comparison", className="card-title", style=HEADER_TEXT_STYLE),
             style=HEADER_STYLE
         ),
         dbc.CardBody([
@@ -273,7 +274,7 @@ def financial_metrics_layout():
                         min=2025,
                         max=2050,
                         value=[2025, 2050],
-                        marks={yr: str(yr) for yr in range(2025, 2051)}
+                        marks={yr: str(yr) for yr in years_data}
                     )
                 ], md=4, xs=12),
                 dbc.Col([
@@ -289,7 +290,6 @@ def financial_metrics_layout():
                 ], md=4, xs=12)
             ]),
             html.Br(),
-            # Set empty figures; callbacks will update these.
             dcc.Graph(id="metric-comparison-chart", figure={}, className="chart-container"),
             html.Hr(),
             dbc.Row([
@@ -301,6 +301,29 @@ def financial_metrics_layout():
         ])
     ], className="mb-4")
 
+def totex_comparison_layout():
+    return dbc.Card([
+        dbc.CardHeader(
+            html.H4("TOTEX Comparison", className="card-title", style=HEADER_TEXT_STYLE),
+            style=HEADER_STYLE
+        ),
+        dbc.CardBody([
+            dbc.Row([
+                dbc.Col(card_component(
+                    "TOTEX Comparison",
+                    dcc.Graph(id="totex-chart", figure={}, className="chart-container")
+                ), md=12, xs=12)
+            ]),
+            html.Br(),
+            dbc.Row([
+                dbc.Col(card_component(
+                    "Cost Breakdown for Current Scenario (2030)",
+                    dcc.Graph(id="dwelling-pie-chart", figure={}, className="chart-container")
+                ), md=12, xs=12)
+            ]),
+        ])
+    ], className="mb-4")
+    
 def power_demand_layout():
     return html.Div([
         html.H2("Power Demand Analysis", className="page-title"),
