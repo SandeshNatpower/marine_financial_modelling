@@ -1064,7 +1064,7 @@ def layout():
                          {"label": "OPEX Comparison", "value": "opex"},
                          {"label": "Emissions Comparison", "value": "emissions"}
                      ],
-                     value=["current", "future", "opex", "emissions"],
+                     value=["opex", "emissions"],
                      labelStyle={"display": "inline-block", "marginRight": "10px"}
                  )
              ], md=6)
@@ -1080,23 +1080,29 @@ def dashboard_layout(api_data, currency):
             dbc.CardHeader(html.H4("Dashboard", className="card-title", style={"color": "white"}),
                           style={"backgroundColor": "#0A4B8C"}),
             dbc.CardBody([
+                
                 dbc.Row([
-                    dbc.Col(dcc.Graph(figure=cashflow_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=totex_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=maintenance_cost_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=penalty_cost_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=spares_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=fuel_consumption_figure(api_data), config={"displayModeBar": False}), md=6)
+                    dbc.Col(dcc.Graph(figure=totex_figure(api_data), config={"displayModeBar": False}), md=12)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(figure=yearly_result_figure(api_data), config={"displayModeBar": False}), md=12)
                 ], className="mb-4"),
-                                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=opex_cost_figure(api_data), config={"displayModeBar": False}), md=12)
+                
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=cashflow_figure(api_data), config={"displayModeBar": False}), md=12),
+                    
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=penalty_cost_figure(api_data), config={"displayModeBar": False}), md=12)
+                ], className="mb-4"),
+                
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=maintenance_cost_figure(api_data), config={"displayModeBar": False}), md=6),
+                    dbc.Col(dcc.Graph(figure=spares_figure(api_data), config={"displayModeBar": False}), md=6)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=fuel_consumption_figure(api_data), config={"displayModeBar": False}), md=6),
+                    dbc.Col(dcc.Graph(figure=opex_cost_figure(api_data), config={"displayModeBar": False}), md=6)
                 ], className="mb-4"),
             ])
         ], className="mb-4")
@@ -1293,7 +1299,7 @@ def totex_figure(api_data=None):
     ))
 
     fig.update_layout(
-        title="Total Expenditure (TOTEX) Over Time",
+        title="Yearly Cashflow",
         xaxis_title="Year",
         yaxis_title="Cumulative TOTEX (€)",
         barmode="relative",
