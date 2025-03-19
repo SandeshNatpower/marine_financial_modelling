@@ -5,6 +5,10 @@ import config
 import plotly.graph_objects as go
 import numpy as np
 
+
+MARGIN_STYLE = dict(l=60, r=30, t=60, b=50)
+TEMPLATE_STYLE = "plotly_white"
+
 # =============================================================================
 # HELPER FUNCTIONS FOR FORMATTING & TABLES
 # =============================================================================
@@ -103,7 +107,7 @@ def get_current_output_table(api_data, conv_factor, currency):
     sailing_hrs = 24
     working_hrs = 24
     idle_hrs    = 24
-    avg_hrs     = 27
+    avg_hrs     = 24
 
     # ----- Average SFC -----
     sfc_data = (current.get("average_sfc") or [{}])[0]
@@ -967,80 +971,385 @@ def get_emissions_comparison_table(api_data):
     return html.Div(table, className="table-responsive")
 
 
-# =============================================================================
-# NEW GRAPH FUNCTIONS
-# =============================================================================
-import plotly.graph_objects as go
+
+def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
+    """Centralized layout configuration with fixed sizing to avoid compression."""
+    fig.update_layout(
+        title=dict(text=title, x=0.5, xanchor="center", font=dict(color="#0A4B8C")),
+        xaxis_title=xaxis_title,
+        yaxis_title=yaxis_title,
+        template=TEMPLATE_STYLE,
+        margin=MARGIN_STYLE,
+        autosize=False,
+        width=1000,    # Fixed width – adjust as needed
+        height=500,    # Fixed height – adjust as needed
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        hovermode="x unified"
+    )
+    return fig
 
 def fuel_consumption_figure(api_data=None):
     """Create a visualization for fuel consumption costs from 2025 to 2050."""
-    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+    if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
-
-    # Extract timeseries data
-    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
-    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
-
-    # Filter years from 2025 to 2050
-    start_year, end_year = 2025, 2050
-    years = list(range(start_year, end_year + 1))
-
-    # Extract fuel costs for each year
+    
+    # Sort timeseries data by year
+    current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
+    
+    years = list(range(2025, 2051))
     current_fuel = {entry.get("year"): entry.get("total_fuel_current_inflated", 0) for entry in current_ts}
     future_fuel = {entry.get("year"): entry.get("total_fuel_future_inflated", 0) for entry in future_ts}
-
-    # Ensure values exist for each year (fill with 0 if missing)
+    
     current_values = [current_fuel.get(year, 0) for year in years]
     future_values = [future_fuel.get(year, 0) for year in years]
-
-    # Create figure
+    
     fig = go.Figure()
-
     fig.add_trace(go.Bar(
         name="Current Fuel Cost",
         x=years,
         y=current_values,
         marker_color="blue"
     ))
-
     fig.add_trace(go.Bar(
         name="Future Fuel Cost",
         x=years,
         y=future_values,
         marker_color="orange"
     ))
-
-    fig.update_layout(
-        title="Fuel Consumption Cost Comparison (2025-2050)",
-        xaxis_title="Year",
-        yaxis_title="Cost ($/day)",
-        barmode="group",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
-    )
-
+    
+    set_figure_layout(fig, "Fuel Cost Comparison (2025-2050)", "Year", "Cost (USD)")
     return fig
-
-
 
 def yearly_result_figure(api_data=None):
-    if api_data is None:
+    """Create a bar chart for yearly financial results."""
+    if not api_data or "result" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
-    results = api_data.get("result", [])
+    
+    results = sorted(api_data["result"], key=lambda x: x.get("year", 0))
     years = [res["year"] for res in results]
-    yearly_results = [res["result"] for res in results]
-    fig = go.Figure(data=[go.Scatter(
-        x=years, 
-        y=yearly_results, 
-        mode="lines+markers", 
-        name="Yearly Result",
-        line=dict(color="purple", width=2)
-    )])
-    fig.update_layout(title="Yearly Financial Result", xaxis_title="Year", yaxis_title="Yearly Result (£)")
+    values = [res["result"] for res in results]
+    
+    # Color-code bars: red for negative, green for positive
+    colors = ['#d62728' if v < 0 else '#2ca02c' for v in values]
+    fig = go.Figure(go.Bar(
+        x=years,
+        y=values,
+        marker_color=colors,
+        name="Net Result"
+    ))
+    
+    set_figure_layout(fig, "Yearly Financial Results", "Year", "Amount (USD)")
     return fig
 
+def spares_figure(api_data=None):
+    """Create a visualization for spares/consumables costs from 2025 to 2050."""
+    if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
+    years = list(range(2025, 2051))
+    
+    current_spares = {entry.get("year"): entry.get("total_spare_current_inflated", 0) for entry in current_ts}
+    future_spares = {entry.get("year"): entry.get("total_spare_future_inflated", 0) for entry in future_ts}
+    current_values = [current_spares.get(year, 0) for year in years]
+    future_values = [future_spares.get(year, 0) for year in years]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Current Spares Cost",
+        x=years,
+        y=current_values,
+        marker_color="blue"
+    ))
+    fig.add_trace(go.Bar(
+        name="Future Spares Cost",
+        x=years,
+        y=future_values,
+        marker_color="orange"
+    ))
+    
+    set_figure_layout(fig, "Spares & Consumables Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    return fig
 
+def penalty_cost_figure(api_data=None):
+    """Create a visualization for penalty cost from 2025 to 2050."""
+    if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
+    years = list(range(2025, 2051))
+    
+    current_penalty = {entry.get("year"): entry.get("current_penalty", 0) for entry in current_ts}
+    future_penalty = {entry.get("year"): entry.get("future_penalty", 0) for entry in future_ts}
+    current_values = [current_penalty.get(year, 0) for year in years]
+    future_values = [future_penalty.get(year, 0) for year in years]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Current Penalty Cost",
+        x=years,
+        y=current_values,
+        marker_color="blue"
+    ))
+    fig.add_trace(go.Bar(
+        name="Future Penalty Cost",
+        x=years,
+        y=future_values,
+        marker_color="orange"
+    ))
+    
+    set_figure_layout(fig, "Penalty Cost Comparison (2025-2050)", "Year", "Penalty Cost (USD)")
+    return fig
 
+def maintenance_cost_figure(api_data=None):
+    """Create a visualization for maintenance cost from 2025 to 2050."""
+    if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
+    years = list(range(2025, 2051))
+    
+    current_maintenance = {entry.get("year"): entry.get("total_maintenance_current_inflated", 0) for entry in current_ts}
+    future_maintenance = {entry.get("year"): entry.get("total_maintenance_future_inflated", 0) for entry in future_ts}
+    current_values = [current_maintenance.get(year, 0) for year in years]
+    future_values = [future_maintenance.get(year, 0) for year in years]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Current Maintenance Cost",
+        x=years,
+        y=current_values,
+        marker_color="green"
+    ))
+    fig.add_trace(go.Bar(
+        name="Future Maintenance Cost",
+        x=years,
+        y=future_values,
+        marker_color="red"
+    ))
+    
+    set_figure_layout(fig, "Maintenance Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    return fig
 
+def totex_figure(api_data=None):
+    """Create a visualization for total expenditure (TOTEX) over time."""
+    if not api_data or "result" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    results = sorted(api_data["result"], key=lambda x: x.get("year", 0))
+    years = [res["year"] for res in results]
+    cumulative_values = [res["cumulative"] for res in results]
+    npv_values = [res.get("npv", 0) for res in results]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=years,
+        y=cumulative_values,
+        name="Cumulative",
+        marker_color="navy"
+    ))
+    fig.add_trace(go.Scatter(
+        x=years,
+        y=npv_values,
+        mode="lines+markers",
+        name="NPV",
+        line=dict(color="gray", width=2)
+    ))
+    
+    set_figure_layout(fig, "Yearly TOTEX", "Year", "Amount (USD)")
+    return fig
+
+def opex_cost_figure(api_data=None):
+    """Create a visualization for OPEX cost from 2025 to 2050."""
+    if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
+    years = list(range(2025, 2051))
+    
+    current_opex = {entry.get("year"): entry.get("current_opex", 0) for entry in current_ts}
+    future_opex = {entry.get("year"): entry.get("future_opex", 0) for entry in future_ts}
+    current_values = [current_opex.get(year, 0) for year in years]
+    future_values = [future_opex.get(year, 0) for year in years]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        name="Current OPEX",
+        x=years,
+        y=current_values,
+        mode="lines+markers",
+        line=dict(color="blue", width=2),
+        marker=dict(size=6)
+    ))
+    fig.add_trace(go.Scatter(
+        name="Future OPEX",
+        x=years,
+        y=future_values,
+        mode="lines+markers",
+        line=dict(color="orange", width=2, dash="dash"),
+        marker=dict(size=6)
+    ))
+    
+    set_figure_layout(fig, "OPEX Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    return fig
+
+def cashflow_figure(api_data=None):
+    """Create a visualization for yearly cash flow."""
+    if not api_data or "result" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    results = sorted(api_data["result"], key=lambda x: x.get("year", 0))
+    years = [res["year"] for res in results]
+    cash_values = [res["result"] for res in results]
+    
+    positive_values = [max(0, v) for v in cash_values]
+    negative_values = [min(0, v) for v in cash_values]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=years,
+        y=positive_values,
+        name="Positive Cash Flow",
+        marker_color="green"
+    ))
+    fig.add_trace(go.Bar(
+        x=years,
+        y=negative_values,
+        name="Negative Cash Flow",
+        marker_color="red"
+    ))
+    fig.add_trace(go.Scatter(
+        x=years,
+        y=cash_values,
+        mode="lines+markers",
+        name="Net Cash Flow",
+        line=dict(color="blue", width=2)
+    ))
+    
+    set_figure_layout(fig, "Yearly Cash Flow", "Year", "Cash Flow (USD)")
+    return fig
+
+def dwelling_at_berth_pie_figure(api_data):
+    """Generate the current dwelling at berth pie chart."""
+    if not api_data or "current_table" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    costs = api_data["current_table"].get("costs", [{}])[0]
+    labels = ["Engine Maintenance", "Spares", "FuelEU Penalty"]
+    values = [
+        costs.get("engine_maintenance_costs", 0),
+        costs.get("spares_consumables_costs", 0),
+        costs.get("fueleu_current_penalty", 0)
+    ]
+    fig = go.Figure(go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.4,
+        textinfo="label+value"
+    ))
+    fig.update_layout(title="Current Berth Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
+    return fig
+
+def future_dwelling_at_berth_pie_figure(api_data):
+    """Generate the future dwelling at berth pie chart."""
+    if not api_data or "future_output_table" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    costs = api_data["future_output_table"].get("costs", [{}])[0]
+    labels = ["Engine Maintenance", "Spares", "FuelEU Penalty", "Shore Power"]
+    values = [
+        costs.get("future_avg_engine_maintenance_costs_day", 0),
+        costs.get("future_avg_spares_consumables_costs_day", 0),
+        costs.get("future_avg_fueleu_day", 0),
+        costs.get("shore_power_maintenance_per_day", 0) + costs.get("shore_power_spares_per_day", 0)
+    ]
+    fig = go.Figure(go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.4,
+        textinfo="label+value"
+    ))
+    fig.update_layout(title="Future Berth Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
+    return fig
+
+def dashboard_layout(api_data, currency):
+    """Create dashboard layout with multiple visualizations."""
+    return dbc.Container([
+        dbc.Card([
+            dbc.CardHeader(
+                html.H4("Dashboard", className="card-title", style={"color": "white"}),
+                style={"backgroundColor": "#0A4B8C"}
+            ),
+            dbc.CardBody([
+                # Top-level financial charts
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=totex_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=12)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=yearly_result_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=12)
+                ], className="mb-4"),
+                # Cashflow and Penalty Cost Charts
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=cashflow_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=12)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=penalty_cost_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=12)
+                ], className="mb-4"),
+                # Maintenance & Spares Cost Side by Side
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=maintenance_cost_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=6),
+                    dbc.Col(dcc.Graph(
+                        figure=spares_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=6)
+                ], className="mb-4"),
+                # Fuel Consumption & OPEX Costs
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=fuel_consumption_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=6),
+                    dbc.Col(dcc.Graph(
+                        figure=opex_cost_figure(api_data), 
+                        config={"displayModeBar": False}
+                    ), md=6)
+                ], className="mb-4"),
+                # Dwelling at Berth (Current vs Future) - Side by Side View
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=dwelling_at_berth_pie_figure(api_data),
+                        config={"displayModeBar": False},
+                        style={"width": "100%", "height": "600px"}
+                    ), md=6),
+                    dbc.Col(dcc.Graph(
+                        figure=future_dwelling_at_berth_pie_figure(api_data),
+                        config={"displayModeBar": False},
+                        style={"width": "100%", "height": "600px"}
+                    ), md=6)
+                ], className="mb-4"),
+            ])
+        ], className="mb-4")
+    ], fluid=True)
 
 def layout():
     return dbc.Container([
@@ -1071,354 +1380,3 @@ def layout():
          ], className="mb-4"),
          html.Div(id="output-content")
     ], fluid=True)
-
-
-def dashboard_layout(api_data, currency):
-    """Create dashboard layout with multiple visualizations."""
-    return dbc.Container([
-        dbc.Card([
-            dbc.CardHeader(html.H4("Dashboard", className="card-title", style={"color": "white"}),
-                          style={"backgroundColor": "#0A4B8C"}),
-            dbc.CardBody([
-                
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=totex_figure(api_data), config={"displayModeBar": False}), md=12)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=yearly_result_figure(api_data), config={"displayModeBar": False}), md=12)
-                ], className="mb-4"),
-                
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=cashflow_figure(api_data), config={"displayModeBar": False}), md=12),
-                    
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=penalty_cost_figure(api_data), config={"displayModeBar": False}), md=12)
-                ], className="mb-4"),
-                
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=maintenance_cost_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=spares_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=fuel_consumption_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=opex_cost_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-            ])
-        ], className="mb-4")
-    ], fluid=True)
-    
-import plotly.graph_objects as go
-
-def spares_figure(api_data=None):
-    """Create a visualization for spares/consumables costs from 2025 to 2050."""
-    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
-        return go.Figure().update_layout(title="No Data Available")
-    
-    # Extract timeseries data
-    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
-    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
-
-    # Filter years from 2025 to 2050
-    start_year, end_year = 2025, 2050
-    years = list(range(start_year, end_year + 1))
-
-    # Extract spare costs for each year
-    current_spares = {entry.get("year"): entry.get("total_spare_current_inflated", 0) for entry in current_ts}
-    future_spares = {entry.get("year"): entry.get("total_spare_future_inflated", 0) for entry in future_ts}
-
-    # Ensure values exist for each year (fill with 0 if missing)
-    current_values = [current_spares.get(year, 0) for year in years]
-    future_values = [future_spares.get(year, 0) for year in years]
-
-    # Create figure
-    fig = go.Figure()
-
-    fig.add_trace(go.Bar(
-        name="Current Spares Cost",
-        x=years,
-        y=current_values,
-        marker_color="blue"
-    ))
-
-    fig.add_trace(go.Bar(
-        name="Future Spares Cost",
-        x=years,
-        y=future_values,
-        marker_color="orange"
-    ))
-
-    fig.update_layout(
-        title="Spares & Consumables Cost Comparison (2025-2050)",
-        xaxis_title="Year",
-        yaxis_title="Cost ($/day)",
-        barmode="group",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
-    )
-
-    return fig
-
-
-
-import plotly.graph_objects as go
-
-def penalty_cost_figure(api_data=None):
-    """Create a visualization for penalty cost from 2025 to 2050."""
-    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
-        return go.Figure().update_layout(title="No Data Available")
-
-    # Extract timeseries data
-    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
-    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
-
-    # Define years range
-    start_year, end_year = 2025, 2050
-    years = list(range(start_year, end_year + 1))
-
-    # Extract penalty costs
-    current_penalty = {entry.get("year"): entry.get("current_penalty", 0) for entry in current_ts}
-    future_penalty = {entry.get("year"): entry.get("future_penalty", 0) for entry in future_ts}
-
-    # Ensure values exist for each year (fill with 0 if missing)
-    current_penalty_values = [current_penalty.get(year, 0) for year in years]
-    future_penalty_values = [future_penalty.get(year, 0) for year in years]
-
-    # Create figure
-    fig = go.Figure()
-
-    fig.add_trace(go.Bar(
-        name="Current Penalty Cost",
-        x=years,
-        y=current_penalty_values,
-        marker_color="blue"
-    ))
-
-    fig.add_trace(go.Bar(
-        name="Future Penalty Cost",
-        x=years,
-        y=future_penalty_values,
-        marker_color="orange"
-    ))
-
-    fig.update_layout(
-        title="Penalty Cost Comparison (2025-2050)",
-        xaxis_title="Year",
-        yaxis_title="Penalty Cost ($)",
-        barmode="group",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
-    )
-
-    return fig
-
-
-
-def maintenance_cost_figure(api_data=None):
-    """Create a visualization for maintenance cost from 2025 to 2050."""
-    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
-        return go.Figure().update_layout(title="No Data Available")
-
-    # Extract timeseries data
-    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
-    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
-
-    # Define years range
-    start_year, end_year = 2025, 2050
-    years = list(range(start_year, end_year + 1))
-
-    # Extract maintenance costs
-    current_maintenance = {entry.get("year"): entry.get("total_maintenance_current_inflated", 0) for entry in current_ts}
-    future_maintenance = {entry.get("year"): entry.get("total_maintenance_future_inflated", 0) for entry in future_ts}
-
-    # Ensure values exist for each year (fill with 0 if missing)
-    current_maintenance_values = [current_maintenance.get(year, 0) for year in years]
-    future_maintenance_values = [future_maintenance.get(year, 0) for year in years]
-
-    # Create figure
-    fig = go.Figure()
-
-    fig.add_trace(go.Bar(
-        name="Current Maintenance Cost",
-        x=years,
-        y=current_maintenance_values,
-        marker_color="green"
-    ))
-
-    fig.add_trace(go.Bar(
-        name="Future Maintenance Cost",
-        x=years,
-        y=future_maintenance_values,
-        marker_color="red"
-    ))
-
-    fig.update_layout(
-        title="Maintenance Cost Comparison (2025-2050)",
-        xaxis_title="Year",
-        yaxis_title="Maintenance Cost ($)",
-        barmode="group",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
-    )
-
-    return fig
-
-
-
-
-import plotly.graph_objects as go
-
-def totex_figure(api_data=None):
-    """Create a visualization for total expenditure (TOTEX) over time."""
-    if api_data is None:
-        return go.Figure().update_layout(title="No Data Available")
-
-    results = api_data.get("result", [])
-    if not results:
-        return go.Figure().update_layout(title="No Data Available")
-
-    # Extract years and values
-    years = [res["year"] for res in results]
-    cumulative_values = [res["cumulative"] for res in results]
-    npv_values = [res.get("npv", 0) for res in results]  # If NPV exists in data
-
-    fig = go.Figure()
-
-    # Add bar chart for cumulative values
-    fig.add_trace(go.Bar(
-        x=years,
-        y=cumulative_values,
-        name="Cumulative",
-        marker_color="navy"
-    ))
-
-    # Add line chart for NPV
-    fig.add_trace(go.Scatter(
-        x=years,
-        y=npv_values,
-        mode="lines+markers",
-        name="NPV",
-        line=dict(color="gray", width=2)
-    ))
-
-    fig.update_layout(
-        title="Yearly Cashflow",
-        xaxis_title="Year",
-        yaxis_title="Cumulative TOTEX (€)",
-        barmode="relative",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5
-        ),
-        template="plotly_white"
-    )
-
-    return fig
-
-
-import plotly.graph_objects as go
-
-def opex_cost_figure(api_data=None):
-    """Create a visualization for OPEX cost from 2025 to 2050."""
-    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
-        return go.Figure().update_layout(title="No Data Available")
-
-    # Extract timeseries data
-    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
-    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
-
-    # Define years range
-    start_year, end_year = 2025, 2050
-    years = list(range(start_year, end_year + 1))
-
-    # Extract OPEX costs
-    current_opex = {entry.get("year"): entry.get("current_opex", 0) for entry in current_ts}
-    future_opex = {entry.get("year"): entry.get("future_opex", 0) for entry in future_ts}
-
-    # Ensure values exist for each year (fill with 0 if missing)
-    current_opex_values = [current_opex.get(year, 0) for year in years]
-    future_opex_values = [future_opex.get(year, 0) for year in years]
-
-    # Create figure
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        name="Current OPEX",
-        x=years,
-        y=current_opex_values,
-        mode="lines+markers",
-        line=dict(color="blue", width=2),
-        marker=dict(size=6)
-    ))
-
-    fig.add_trace(go.Scatter(
-        name="Future OPEX",
-        x=years,
-        y=future_opex_values,
-        mode="lines+markers",
-        line=dict(color="orange", width=2, dash="dash"),
-        marker=dict(size=6)
-    ))
-
-    fig.update_layout(
-        title="OPEX Cost Comparison (2025-2050)",
-        xaxis_title="Year",
-        yaxis_title="OPEX Cost ($)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-        template="plotly_white"
-    )
-
-    return fig
-
-def cashflow_figure(api_data=None):
-    """Create a visualization for yearly cash flow."""
-    if api_data is None:
-        return go.Figure().update_layout(title="No Data Available")
-    
-    results = api_data.get("result", [])
-    years = [res["year"] for res in results]
-    yearly_results = [res["result"] for res in results]
-    
-    positive_values = [max(0, val) for val in yearly_results]
-    negative_values = [min(0, val) for val in yearly_results]
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=years,
-        y=positive_values,
-        name="Positive Cash Flow",
-        marker_color="green"
-    ))
-    
-    fig.add_trace(go.Bar(
-        x=years,
-        y=negative_values,
-        name="Negative Cash Flow",
-        marker_color="red"
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=years,
-        y=yearly_results,
-        mode="lines+markers",
-        name="Net Cash Flow",
-        line=dict(color="blue", width=2)
-    ))
-    
-    fig.update_layout(
-        title="Yearly Cash Flow",
-        xaxis_title="Year",
-        yaxis_title="Cash Flow (£)",
-        barmode="relative",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
-    )
-    
-    return fig
-

@@ -168,7 +168,7 @@ def get_vessel_image_path(vessel_type):
 # -------------------------------------------------------------------------------
 def layout():
     return html.Div([
-        html.H1("Step 1: Vessel Details (version 1.1)", className="mb-4", style={"color": PRIMARY_COLOR}),
+        html.H1("Step 1: Vessel Details (version 1.2)", className="mb-4", style={"color": PRIMARY_COLOR}),
         dbc.Card([
             dbc.CardHeader(
                 html.H4("Search for Vessel Data", style={"color": "white"}),
@@ -372,5 +372,13 @@ def layout():
                     id="debug-collapse", is_open=False
                 )
             ])
-        ], className="mt-3 mb-5", id="debug-section", style={"display": "block"})
+        ], className="mt-3 mb-5", id="debug-section", style={"display": "block"}),
+        html.Footer("Version 1.2", style={
+            "textAlign": "center",
+            "color": "gray",
+            "padding": "10px",
+            "fontSize": "14px",
+            "marginTop": "20px"
+        })
+       
     ])

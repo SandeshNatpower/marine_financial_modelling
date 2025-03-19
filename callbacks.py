@@ -10,6 +10,9 @@ import plotly.graph_objects as go
 import numpy as np
 import pages
 import pages.power_profiles
+import pages.input_module
+from pages.input_module import get_vessel_details
+
 
 # =============================================================================
 # GLOBAL STYLES & CONSTANTS
@@ -188,7 +191,7 @@ def process_financial_results(api_data):
 ###########################################################################
 def register_callbacks(app):
     """Register all Dash callbacks."""
-    
+
     @app.callback(
         [Output('vessel-data-store', 'data'),
          Output('search-results', 'children')],
@@ -222,7 +225,7 @@ def register_callbacks(app):
         return (
             vessel_data.get('vessel_name', config.DEFAULT_VESSEL["vessel_name"]),
             vessel_data.get('imo', config.DEFAULT_VESSEL["imo"]),
-            vessel_data.get('vessel_category', config.DEFAULT_VESSEL["vessel_category"]),
+            vessel_data.get('new_vessel_category', config.DEFAULT_VESSEL["vessel_category"]),
             vessel_data.get('gross_tonnage', config.DEFAULT_VESSEL["gross_tonnage"]),
             vessel_data.get('year_built', config.DEFAULT_VESSEL["year_built"]),
             vessel_data.get('dwt', config.DEFAULT_VESSEL["dwt"])
