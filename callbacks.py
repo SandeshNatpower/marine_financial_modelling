@@ -8,6 +8,8 @@ import dash_bootstrap_components as dbc
 import config
 import plotly.graph_objects as go
 import numpy as np
+import pages
+import pages.power_profiles
 
 # =============================================================================
 # GLOBAL STYLES & CONSTANTS
@@ -25,9 +27,12 @@ from pages.output_module import (
     dashboard_layout,
     cashflow_figure,
     totex_figure,
-    engine_power_profile_figure,
-    energy_demand_figure,
-    spares_figure
+    maintenance_cost_figure,
+    penalty_cost_figure,
+    spares_figure,
+    opex_cost_figure,
+    fuel_consumption_figure,
+    yearly_result_figure
 )
 
 def card_component(title, children):
@@ -183,6 +188,7 @@ def process_financial_results(api_data):
 ###########################################################################
 def register_callbacks(app):
     """Register all Dash callbacks."""
+    
     @app.callback(
         [Output('vessel-data-store', 'data'),
          Output('search-results', 'children')],
@@ -199,7 +205,7 @@ def register_callbacks(app):
         from pages.input_module import get_vessel_details
         vessel_data = get_vessel_details(search_term, search_type)
         return vessel_data, f"Found vessel: {vessel_data.get('vessel_name', 'Unknown')}"
-
+    
     @app.callback(
         [Output('vessel-name', 'value'),
          Output('imo-number', 'value'),
@@ -221,7 +227,7 @@ def register_callbacks(app):
             vessel_data.get('year_built', config.DEFAULT_VESSEL["year_built"]),
             vessel_data.get('dwt', config.DEFAULT_VESSEL["dwt"])
         )
-
+    
     @app.callback(
         [Output('main-power', 'value'),
          Output('aux-power', 'value'),
@@ -245,7 +251,7 @@ def register_callbacks(app):
             vessel_data.get("main_fuel_type", "MDO"),
             vessel_data.get("aux_fuel_type", "MDO")
         )
-
+    
     @app.callback(
         [Output('vessel-image', 'src'),
          Output('vessel-type-display', 'children')],
@@ -265,24 +271,23 @@ def register_callbacks(app):
             html.Span(vessel_category)
         ])
         return image_path, vessel_type_display
-
+    
     @app.callback(
         [Output('sailing-days', 'value'),
-        Output('working-days', 'value'),
-        Output('idle-days', 'value'),
-        Output('shore-days', 'value'),
-        Output('sailing-engine-load', 'value'),
-        Output('working-engine-load', 'value'),
-        Output('shore-engine-load', 'value'),
-        Output('engine-maint-cost', 'value'),
-        Output('spares-cost', 'value'),
-        Output('fueleu-penalty', 'value')],
+         Output('working-days', 'value'),
+         Output('idle-days', 'value'),
+         Output('shore-days', 'value'),
+         Output('sailing-engine-load', 'value'),
+         Output('working-engine-load', 'value'),
+         Output('shore-engine-load', 'value'),
+         Output('engine-maint-cost', 'value'),
+         Output('spares-cost', 'value'),
+         Output('fueleu-penalty', 'value')],
         Input('vessel-data-store', 'data'),
         prevent_initial_call=True
     )
     def update_operational_and_maintenance_inputs(vessel_data):
         from pages.input_module import DEFAULT_VESSEL
-        # Merge fetched vessel details with defaults so that dynamic values override defaults.
         if not vessel_data:
             vessel_data = DEFAULT_VESSEL
         else:
@@ -292,52 +297,51 @@ def register_callbacks(app):
             vessel_data.get('working_days', 40),
             vessel_data.get('idle_days', 126),
             vessel_data.get('shore_days', 0),
-            vessel_data.get('sailing_engine_load', 0.5),  # Already a percentage (e.g. 50)
-            vessel_data.get('working_engine_load', 0.3),   # (e.g. 30)
-            vessel_data.get('shore_engine_load', 0.4),     # (e.g. 39.5)
+            vessel_data.get('sailing_engine_load', 0.5),
+            vessel_data.get('working_engine_load', 0.3),
+            vessel_data.get('shore_engine_load', 0.4),
             vessel_data.get('ENGINE_MAINTENANCE_COSTS_PER_HOUR', 20),
             vessel_data.get('SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR', 2),
             vessel_data.get('FUELEU_CURRENT_PENALTY_PER_YEAR', 729348.5444)
         )
-
-
+    
     @app.callback(
         [Output('api-data-store', 'data'),
-        Output('tab-switch', 'data')],
+         Output('tab-switch', 'data')],
         Input('calculate-button', 'n_clicks'),
         [State('main-power', 'value'),
-        State('aux-power', 'value'),
-        State('main-fuel-type', 'value'),
-        State('aux-fuel-type', 'value'),
-        State('sailing-days', 'value'),
-        State('working-days', 'value'),
-        State('idle-days', 'value'),
-        State('shore-days', 'value'),
-        State('sailing-engine-load', 'value'),
-        State('working-engine-load', 'value'),
-        State('shore-engine-load', 'value'),
-        State('engine-maint-cost', 'value'),
-        State('spares-cost', 'value'),
-        State('fueleu-penalty', 'value'),
-        State('future-main-fuel-type', 'value'),
-        State('future-aux-fuel-type', 'value'),
-        State('biofuels-spares-cost', 'value'),
-        State('fueleu-future-penalty', 'value'),
-        State('parasitic-load', 'value'),
-        State('biofuels-blend', 'value'),
-        State('shore-maint-cost', 'value'),
-        State('shore-spares-cost', 'value'),
-        State('shore-enable', 'value'),
-        State('npv-rate', 'value'),
-        State('capex', 'value'),
-        State('shore-port', 'value'),
-        State('reporting-year', 'value'),
-        State('inflation-rate', 'value'),
-        State('main-engine-speed', 'value'),
-        State('main-engine-type', 'value'),
-        State('aux-engine-speed', 'value'),
-        State('aux-engine-type', 'value'),
-        State('vessel-data-store', 'data')],
+         State('aux-power', 'value'),
+         State('main-fuel-type', 'value'),
+         State('aux-fuel-type', 'value'),
+         State('sailing-days', 'value'),
+         State('working-days', 'value'),
+         State('idle-days', 'value'),
+         State('shore-days', 'value'),
+         State('sailing-engine-load', 'value'),
+         State('working-engine-load', 'value'),
+         State('shore-engine-load', 'value'),
+         State('engine-maint-cost', 'value'),
+         State('spares-cost', 'value'),
+         State('fueleu-penalty', 'value'),
+         State('future-main-fuel-type', 'value'),
+         State('future-aux-fuel-type', 'value'),
+         State('biofuels-spares-cost', 'value'),
+         State('fueleu-future-penalty', 'value'),
+         State('parasitic-load', 'value'),
+         State('biofuels-blend', 'value'),
+         State('shore-maint-cost', 'value'),
+         State('shore-spares-cost', 'value'),
+         State('shore-enable', 'value'),
+         State('npv-rate', 'value'),
+         State('capex', 'value'),
+         State('shore-port', 'value'),
+         State('reporting-year', 'value'),
+         State('inflation-rate', 'value'),
+         State('main-engine-speed', 'value'),
+         State('main-engine-type', 'value'),
+         State('aux-engine-speed', 'value'),
+         State('aux-engine-type', 'value'),
+         State('vessel-data-store', 'data')],
         prevent_initial_call=True
     )
     def update_emissions_data_callback(
@@ -362,7 +366,6 @@ def register_callbacks(app):
         params = {
             "main_engine_power_kw": float(main_power),
             "aux_engine_power_kw": float(aux_power),
-            # Convert engine loads from percentage to fraction (0-1)
             "sailing_engine_load": float(sailing_engine_load),
             "working_engine_load": float(working_engine_load),
             "shore_engine_load": float(shore_engine_load),
@@ -384,7 +387,6 @@ def register_callbacks(app):
             "FUELEU_CURRENT_PENALTY_PER_YEAR": float(fueleu_penalty),
             "FUELEU_FUTURE_PENALTY_PER_YEAR": float(fueleu_future_penalty),
             "PARASITIC_LOAD_ENGINE": float(parasitic_load),
-            # Convert biofuels blend from percentage to fraction
             "BIOFUELS_BLEND_PERCENTAGE": float(biofuels_blend) / 100.0,
             "shore_enable": shore_enable_bool,
             "inflation_rate": (float(inflation_rate) / 100.0) if inflation_rate else 0.02,
@@ -401,8 +403,103 @@ def register_callbacks(app):
             return financial_data, "output"
         else:
             return None, "input"
+        
+    # ------------------------------
+    # UPDATED FIGURE CALLBACKS (USING power_profiles.py FUNCTIONS)
+    # ------------------------------
+    @app.callback(
+        Output("metric-comparison-chart", "figure"),
+        [Input("metric-dropdown", "value"),
+         Input("year-range-slider", "value"),
+         Input("scenario-filter", "value")]
+    )
+    def update_metric_comparison_chart(selected_metric, year_range, selected_scenarios):
+        return pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios)
+    
+    @app.callback(
+        Output("detail-power-profile-chart", "figure"),
+        [Input("detail-peak-power", "value"),
+         Input("detail-base-load", "value")]
+    )
+    def update_power_profile_chart(peak_power, base_load):
+        if not peak_power or not base_load:
+            peak_power = 25000
+            base_load = 40
+        x, y = pages.power_profiles.generate_load_profile(peak_power, base_load)
+        fig = go.Figure(data=go.Scatter(x=x, y=y, mode='lines', name="Load Profile"))
+        pages.power_profiles.set_figure_layout(fig, "Daily Load Profile", "Hour", "Power (kW)")
+        return fig
+    
+    @app.callback(
+        Output('energy-demand-chart', 'figure'),
+        [Input('detail-peak-power', 'value'),
+        Input('detail-base-load', 'value')]
+    )
+    def update_energy_demand_chart(peak_power, base_load_percent):
+        if peak_power is None or base_load_percent is None:
+            return go.Figure(layout={"title": "No Data Available", "xaxis_title": "Year", "yaxis_title": "Energy Demand (MWh)"})
+        
+        years_data, demand_data = pages.power_profiles.generate_load_profile(peak_power=peak_power, base_load_percent=base_load_percent)
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=years_data, y=demand_data, mode="lines+markers", name="Projected Demand"))
+        pages.power_profiles.set_figure_layout(fig, "Projected Energy Demand Over Time", "Hour of the Day", "Energy Demand (kW)")
+        
+        return fig
+
+    
+    @app.callback(
+        Output("dashboard-charts-container", "children"),
+        Input("dashboard-chart-selector", "value")
+    )
+    def update_dashboard_charts(selected_charts):
+        charts = []
+        if "dwelling" in selected_charts:
+            charts.append(
+                card_component("Dwelling at Berth - Biofuel Blend Minimum",
+                            dcc.Graph(figure=pages.power_profiles.dwelling_at_berth_pie_figure(), className="chart-container"))
+            )
+        if "npv" in selected_charts:
+            years_data, scenarios = pages.power_profiles.load_totex_scenarios()
+            fig = go.Figure()
+            for label, sc in scenarios.items():
+                if "NPV" in sc and len(sc["NPV"]) == len(years_data):
+                    fig.add_trace(go.Scatter(x=years_data, y=sc["NPV"], mode="lines", name=label))
+            pages.power_profiles.set_figure_layout(fig, "NPV Comparison", "Year", "NPV (£)")
+            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+            charts.append(card_component("NPV Comparison", dcc.Graph(figure=fig, className="chart-container")))
+        if "result" in selected_charts:
+            years_data, scenarios = pages.power_profiles.load_totex_scenarios()
+            fig = go.Figure()
+            for label, sc in scenarios.items():
+                if "Result" in sc and len(sc["Result"]) == len(years_data):
+                    fig.add_trace(go.Scatter(x=years_data, y=sc["Result"], mode="lines", name=label))
+            pages.power_profiles.set_figure_layout(fig, "Result Comparison", "Year", "Result (£)")
+            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+            charts.append(card_component("Result Comparison", dcc.Graph(figure=fig, className="chart-container")))
+        if "cumulative" in selected_charts:
+            years_data, scenarios = pages.power_profiles.load_totex_scenarios()
+            fig = go.Figure()
+            for label, sc in scenarios.items():
+                if "Cumulative" in sc and len(sc["Cumulative"]) == len(years_data):
+                    fig.add_trace(go.Scatter(x=years_data, y=sc["Cumulative"], mode="lines", name=label))
+            pages.power_profiles.set_figure_layout(fig, "Cumulative Comparison", "Year", "Cumulative (£)")
+            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+            charts.append(card_component("Cumulative Comparison", dcc.Graph(figure=fig, className="chart-container")))
+        if "cashflow" in selected_charts:
+            charts.append(
+                card_component("Cashflow Analysis", 
+                            dcc.Graph(figure=pages.power_profiles.cashflow_figure(), className="chart-container"))
+            )
+        if "totex" in selected_charts:
+            charts.append(
+                card_component("TOTEX Comparison", 
+                            dcc.Graph(figure=pages.power_profiles.totex_figure(), className="chart-container"))
+            )
+        return charts
 
 
+    
     @app.callback(
         Output("output-content", "children"),
         [Input("api-data-store", "data"),
@@ -412,10 +509,7 @@ def register_callbacks(app):
     def display_emissions_output(api_data, currency, selected_tables):
         if not api_data:
             return html.Div(
-                dbc.Alert(
-                    "No data available. Please calculate emissions and costs first.",
-                    color="warning"
-                ),
+                dbc.Alert("No data available. Please calculate emissions and costs first.", color="warning"),
                 className="mt-4"
             )
         if not selected_tables:
@@ -423,10 +517,10 @@ def register_callbacks(app):
                 dbc.Alert("Please select at least one table to display.", color="info"),
                 className="mt-4"
             )
-
+    
         conv_factor = config.CURRENCIES.get(currency, {}).get("conversion", 1.0)
         sections = []
-
+    
         from pages.output_module import (
             get_current_output_table,
             get_future_output_table,
@@ -434,7 +528,7 @@ def register_callbacks(app):
             get_emissions_comparison_table,
             dashboard_layout
         )
-
+    
         if 'current' in selected_tables:
             sections.append(
                 dbc.Card(
@@ -475,7 +569,7 @@ def register_callbacks(app):
                     className="mb-4"
                 )
             )
-
+    
         dash_layout_content = dashboard_layout(api_data, currency)
         sections.append(
             dbc.Card(

@@ -970,19 +970,56 @@ def get_emissions_comparison_table(api_data):
 # =============================================================================
 # NEW GRAPH FUNCTIONS
 # =============================================================================
+import plotly.graph_objects as go
+
 def fuel_consumption_figure(api_data=None):
-    if api_data is None:
+    """Create a visualization for fuel consumption costs from 2025 to 2050."""
+    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
-    current_table = api_data.get("current_table", {})
-    future_table = api_data.get("future_output_table", {})
-    current_kg = (current_table.get("fuel_consumption_kg") or [{}])[0].get("avg_fuel_consumption_day", 55939)
-    future_kg = (future_table.get("fuel_consumption_kg") or [{}])[0].get("avg_shore_fuel_consumption_day", 0)
-    fig = go.Figure(data=[
-         go.Bar(name="Current Fuel (kg/day)", x=["Fuel Consumption"], y=[current_kg], marker_color="blue"),
-         go.Bar(name="Future Fuel (kg/day)", x=["Fuel Consumption"], y=[future_kg], marker_color="orange")
-    ])
-    fig.update_layout(title="Fuel Consumption Comparison", barmode="group", yaxis_title="Fuel (kg/day)")
+
+    # Extract timeseries data
+    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
+
+    # Filter years from 2025 to 2050
+    start_year, end_year = 2025, 2050
+    years = list(range(start_year, end_year + 1))
+
+    # Extract fuel costs for each year
+    current_fuel = {entry.get("year"): entry.get("total_fuel_current_inflated", 0) for entry in current_ts}
+    future_fuel = {entry.get("year"): entry.get("total_fuel_future_inflated", 0) for entry in future_ts}
+
+    # Ensure values exist for each year (fill with 0 if missing)
+    current_values = [current_fuel.get(year, 0) for year in years]
+    future_values = [future_fuel.get(year, 0) for year in years]
+
+    # Create figure
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        name="Current Fuel Cost",
+        x=years,
+        y=current_values,
+        marker_color="blue"
+    ))
+
+    fig.add_trace(go.Bar(
+        name="Future Fuel Cost",
+        x=years,
+        y=future_values,
+        marker_color="orange"
+    ))
+
+    fig.update_layout(
+        title="Fuel Consumption Cost Comparison (2025-2050)",
+        xaxis_title="Year",
+        yaxis_title="Cost ($/day)",
+        barmode="group",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+
     return fig
+
 
 
 def yearly_result_figure(api_data=None):
@@ -1002,31 +1039,7 @@ def yearly_result_figure(api_data=None):
     return fig
 
 
-def dashboard_layout(api_data, currency):
-    """Create dashboard layout with multiple visualizations."""
-    return dbc.Container([
-        dbc.Card([
-            dbc.CardHeader(html.H4("Dashboard", className="card-title", style={"color": "white"}),
-                          style={"backgroundColor": "#0A4B8C"}),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=cashflow_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=totex_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=engine_power_profile_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=energy_demand_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=spares_figure(api_data), config={"displayModeBar": False}), md=6),
-                    dbc.Col(dcc.Graph(figure=fuel_consumption_figure(api_data), config={"displayModeBar": False}), md=6)
-                ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=yearly_result_figure(api_data), config={"displayModeBar": False}), md=12)
-                ], className="mb-4")
-            ])
-        ], className="mb-4")
-    ], fluid=True)
+
 
 
 def layout():
@@ -1060,175 +1073,296 @@ def layout():
     ], fluid=True)
 
 
+def dashboard_layout(api_data, currency):
+    """Create dashboard layout with multiple visualizations."""
+    return dbc.Container([
+        dbc.Card([
+            dbc.CardHeader(html.H4("Dashboard", className="card-title", style={"color": "white"}),
+                          style={"backgroundColor": "#0A4B8C"}),
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=cashflow_figure(api_data), config={"displayModeBar": False}), md=6),
+                    dbc.Col(dcc.Graph(figure=totex_figure(api_data), config={"displayModeBar": False}), md=6)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=maintenance_cost_figure(api_data), config={"displayModeBar": False}), md=6),
+                    dbc.Col(dcc.Graph(figure=penalty_cost_figure(api_data), config={"displayModeBar": False}), md=6)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=spares_figure(api_data), config={"displayModeBar": False}), md=6),
+                    dbc.Col(dcc.Graph(figure=fuel_consumption_figure(api_data), config={"displayModeBar": False}), md=6)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=yearly_result_figure(api_data), config={"displayModeBar": False}), md=12)
+                ], className="mb-4"),
+                                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=opex_cost_figure(api_data), config={"displayModeBar": False}), md=12)
+                ], className="mb-4"),
+            ])
+        ], className="mb-4")
+    ], fluid=True)
+    
+import plotly.graph_objects as go
+
 def spares_figure(api_data=None):
-    """Create a visualization for spares/consumables costs."""
-    if api_data is None:
+    """Create a visualization for spares/consumables costs from 2025 to 2050."""
+    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
     
-    current_spare = (api_data.get("current_table", {}).get("costs") or [{}])[0].get("avg_spares_consumables_costs_per_engine_hour", 0)
-    future_spare = (api_data.get("future_output_table", {}).get("costs") or [{}])[0].get("future_avg_spares_consumables_costs_day", 0)
-    
-    fig = go.Figure(data=[
-        go.Bar(name="Current Spares Cost", x=["Spares/Consumables"], y=[current_spare], marker_color="blue"),
-        go.Bar(name="Future Spares Cost", x=["Spares/Consumables"], y=[future_spare], marker_color="orange")
-    ])
-    
-    fig.update_layout(
-        title="Spares & Consumables Cost Comparison",
-        barmode="group",
-        yaxis_title="Cost ($/day)"
-    )
-    
-    return fig
+    # Extract timeseries data
+    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
 
+    # Filter years from 2025 to 2050
+    start_year, end_year = 2025, 2050
+    years = list(range(start_year, end_year + 1))
 
-def energy_demand_figure(api_data=None):
-    """Create a visualization for energy demand."""
-    if api_data is None:
-        return go.Figure().update_layout(title="No Data Available")
-    
-    current_table = api_data.get("current_table", {})
-    future_table = api_data.get("future_output_table", {})
-    
-    # Corrected key names for energy requirement (remove typo "eneregy")
-    power_day_current = (current_table.get("power_calc_day") or [{}])[0]
-    power_day_future = (future_table.get("power_calc_day") or [{}])[0]
-    
-    sailing_energy_current = power_day_current.get("sailing_energy_req_kwh_day", 460800)
-    working_energy_current = power_day_current.get("working_energy_req_kwh_day", 276480)
-    idle_energy_current = power_day_current.get("idle_energy_req_kwh_day", 19152)
-    
-    sailing_energy_future = power_day_future.get("sailing_energy_req_kwh_day", 460800)
-    working_energy_future = power_day_future.get("working_energy_req_kwh_day", 276480)
-    idle_energy_future = power_day_future.get("idle_energy_req_kwh_day", 19152)
-    shore_energy_future = power_day_future.get("shore_energy_req_kwh_day", 0)
-    
-    categories = ["Sailing", "Working", "Idle/Moored"]
-    current_values = [sailing_energy_current, working_energy_current, idle_energy_current]
-    future_values = [sailing_energy_future, working_energy_future, idle_energy_future]
-    
-    if shore_energy_future:
-        categories.append("Shore Power")
-        future_values.append(shore_energy_future)
-        current_values.append(0)  # No shore power in current scenario
-    
+    # Extract spare costs for each year
+    current_spares = {entry.get("year"): entry.get("total_spare_current_inflated", 0) for entry in current_ts}
+    future_spares = {entry.get("year"): entry.get("total_spare_future_inflated", 0) for entry in future_ts}
+
+    # Ensure values exist for each year (fill with 0 if missing)
+    current_values = [current_spares.get(year, 0) for year in years]
+    future_values = [future_spares.get(year, 0) for year in years]
+
+    # Create figure
     fig = go.Figure()
-    
+
     fig.add_trace(go.Bar(
-        x=categories, 
+        name="Current Spares Cost",
+        x=years,
         y=current_values,
-        name="Current Energy",
         marker_color="blue"
     ))
-    
+
     fig.add_trace(go.Bar(
-        x=categories, 
+        name="Future Spares Cost",
+        x=years,
         y=future_values,
-        name="Future Energy",
         marker_color="orange"
     ))
-    
+
     fig.update_layout(
-        title="Energy Requirement by Operating Mode",
+        title="Spares & Consumables Cost Comparison (2025-2050)",
+        xaxis_title="Year",
+        yaxis_title="Cost ($/day)",
         barmode="group",
-        xaxis_title="Operating Mode",
-        yaxis_title="Energy (kWh/day)"
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
-    
+
     return fig
 
 
-def engine_power_profile_figure(api_data=None):
-    """Create a visualization of engine power profile."""
-    if api_data is None:
+
+import plotly.graph_objects as go
+
+def penalty_cost_figure(api_data=None):
+    """Create a visualization for penalty cost from 2025 to 2050."""
+    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
-    
-    current_table = api_data.get("current_table", {})
-    future_table = api_data.get("future_output_table", {})
-    
-    eng_data_current = (current_table.get("engine_power") or current_table.get("enginge_power") or [{}])[0]
-    eng_data_future = (future_table.get("engine_power") or future_table.get("enginge_power") or [{}])[0]
-    
-    sailing_power_current = eng_data_current.get("sailing_power", 19200)
-    working_power_current = eng_data_current.get("working_power", 11520)
-    idle_power_current = eng_data_current.get("idle_power", 798)
-    
-    sailing_power_future = eng_data_future.get("sailing_power", 19200)
-    working_power_future = eng_data_future.get("working_power", 11520)
-    idle_power_future = eng_data_future.get("idle_power", 798)
-    shore_power_future = eng_data_future.get("shore_power", 0)
-    
-    categories = ["Sailing", "Working", "Idle/Moored"]
-    current_values = [sailing_power_current, working_power_current, idle_power_current]
-    future_values = [sailing_power_future, working_power_future, idle_power_future]
-    
-    if shore_power_future:
-        categories.append("Shore Power")
-        future_values.append(shore_power_future)
-        current_values.append(0)
-    
+
+    # Extract timeseries data
+    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
+
+    # Define years range
+    start_year, end_year = 2025, 2050
+    years = list(range(start_year, end_year + 1))
+
+    # Extract penalty costs
+    current_penalty = {entry.get("year"): entry.get("current_penalty", 0) for entry in current_ts}
+    future_penalty = {entry.get("year"): entry.get("future_penalty", 0) for entry in future_ts}
+
+    # Ensure values exist for each year (fill with 0 if missing)
+    current_penalty_values = [current_penalty.get(year, 0) for year in years]
+    future_penalty_values = [future_penalty.get(year, 0) for year in years]
+
+    # Create figure
     fig = go.Figure()
-    
+
     fig.add_trace(go.Bar(
-        x=categories, 
-        y=current_values,
-        name="Current Power",
+        name="Current Penalty Cost",
+        x=years,
+        y=current_penalty_values,
         marker_color="blue"
     ))
-    
+
     fig.add_trace(go.Bar(
-        x=categories, 
-        y=future_values,
-        name="Future Power",
+        name="Future Penalty Cost",
+        x=years,
+        y=future_penalty_values,
         marker_color="orange"
     ))
-    
+
     fig.update_layout(
-        title="Engine Power Profile by Operating Mode",
+        title="Penalty Cost Comparison (2025-2050)",
+        xaxis_title="Year",
+        yaxis_title="Penalty Cost ($)",
         barmode="group",
-        xaxis_title="Operating Mode",
-        yaxis_title="Power (kW)"
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
-    
+
     return fig
 
+
+
+def maintenance_cost_figure(api_data=None):
+    """Create a visualization for maintenance cost from 2025 to 2050."""
+    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+
+    # Extract timeseries data
+    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
+
+    # Define years range
+    start_year, end_year = 2025, 2050
+    years = list(range(start_year, end_year + 1))
+
+    # Extract maintenance costs
+    current_maintenance = {entry.get("year"): entry.get("total_maintenance_current_inflated", 0) for entry in current_ts}
+    future_maintenance = {entry.get("year"): entry.get("total_maintenance_future_inflated", 0) for entry in future_ts}
+
+    # Ensure values exist for each year (fill with 0 if missing)
+    current_maintenance_values = [current_maintenance.get(year, 0) for year in years]
+    future_maintenance_values = [future_maintenance.get(year, 0) for year in years]
+
+    # Create figure
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        name="Current Maintenance Cost",
+        x=years,
+        y=current_maintenance_values,
+        marker_color="green"
+    ))
+
+    fig.add_trace(go.Bar(
+        name="Future Maintenance Cost",
+        x=years,
+        y=future_maintenance_values,
+        marker_color="red"
+    ))
+
+    fig.update_layout(
+        title="Maintenance Cost Comparison (2025-2050)",
+        xaxis_title="Year",
+        yaxis_title="Maintenance Cost ($)",
+        barmode="group",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+
+    return fig
+
+
+
+
+import plotly.graph_objects as go
 
 def totex_figure(api_data=None):
     """Create a visualization for total expenditure (TOTEX) over time."""
     if api_data is None:
         return go.Figure().update_layout(title="No Data Available")
-    
+
     results = api_data.get("result", [])
+    if not results:
+        return go.Figure().update_layout(title="No Data Available")
+
+    # Extract years and values
     years = [res["year"] for res in results]
     cumulative_values = [res["cumulative"] for res in results]
-    
+    npv_values = [res.get("npv", 0) for res in results]  # If NPV exists in data
+
     fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
+
+    # Add bar chart for cumulative values
+    fig.add_trace(go.Bar(
         x=years,
         y=cumulative_values,
-        mode="lines+markers",
-        name="Cumulative TOTEX",
-        line=dict(color="green", width=2)
+        name="Cumulative",
+        marker_color="navy"
     ))
-    
-    fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    
+
+    # Add line chart for NPV
+    fig.add_trace(go.Scatter(
+        x=years,
+        y=npv_values,
+        mode="lines+markers",
+        name="NPV",
+        line=dict(color="gray", width=2)
+    ))
+
     fig.update_layout(
-        title="Total Expenditure Over Time",
+        title="Total Expenditure (TOTEX) Over Time",
         xaxis_title="Year",
-        yaxis_title="Cumulative TOTEX (£)",
+        yaxis_title="Cumulative TOTEX (€)",
+        barmode="relative",
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
-            xanchor="right",
-            x=1
-        )
+            xanchor="center",
+            x=0.5
+        ),
+        template="plotly_white"
     )
-    
+
     return fig
 
+
+import plotly.graph_objects as go
+
+def opex_cost_figure(api_data=None):
+    """Create a visualization for OPEX cost from 2025 to 2050."""
+    if api_data is None or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+
+    # Extract timeseries data
+    current_ts = sorted(api_data.get("current_timeseries", []), key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data.get("future_timeseries", []), key=lambda x: x.get("year", 0))
+
+    # Define years range
+    start_year, end_year = 2025, 2050
+    years = list(range(start_year, end_year + 1))
+
+    # Extract OPEX costs
+    current_opex = {entry.get("year"): entry.get("current_opex", 0) for entry in current_ts}
+    future_opex = {entry.get("year"): entry.get("future_opex", 0) for entry in future_ts}
+
+    # Ensure values exist for each year (fill with 0 if missing)
+    current_opex_values = [current_opex.get(year, 0) for year in years]
+    future_opex_values = [future_opex.get(year, 0) for year in years]
+
+    # Create figure
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        name="Current OPEX",
+        x=years,
+        y=current_opex_values,
+        mode="lines+markers",
+        line=dict(color="blue", width=2),
+        marker=dict(size=6)
+    ))
+
+    fig.add_trace(go.Scatter(
+        name="Future OPEX",
+        x=years,
+        y=future_opex_values,
+        mode="lines+markers",
+        line=dict(color="orange", width=2, dash="dash"),
+        marker=dict(size=6)
+    ))
+
+    fig.update_layout(
+        title="OPEX Cost Comparison (2025-2050)",
+        xaxis_title="Year",
+        yaxis_title="OPEX Cost ($)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        template="plotly_white"
+    )
+
+    return fig
 
 def cashflow_figure(api_data=None):
     """Create a visualization for yearly cash flow."""
@@ -1281,3 +1415,4 @@ def cashflow_figure(api_data=None):
     )
     
     return fig
+

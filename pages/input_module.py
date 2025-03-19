@@ -4,7 +4,7 @@ import dash_bootstrap_components as dbc
 import config  # Assumes config has FUEL_OPTIONS, DEFAULT_VESSEL, FINANCIAL_ENDPOINT, etc.
 import requests
 from urllib.parse import urlencode
-
+import config
 # -------------------------------------------------------------------------------
 # GLOBAL CONSTANTS AND DEFAULTS
 # -------------------------------------------------------------------------------
