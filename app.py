@@ -1,8 +1,7 @@
 import dash
-from dash import html, dcc, Input, Output, State
+from dash import html, dcc, Input, Output, State, no_update
 import dash_bootstrap_components as dbc
 from pages import input_module, output_module, power_profiles, reporting, database
-
 
 ###############################################################################
 # APP SETUP
@@ -10,16 +9,16 @@ from pages import input_module, output_module, power_profiles, reporting, databa
 app = dash.Dash(
     __name__,
     external_stylesheets=[dbc.themes.FLATLY],
-    suppress_callback_exceptions=True, 
+    suppress_callback_exceptions=True,
     title="NatPower Marine Financial Modelling"
 )
 
-# Layout color and sizing constants (Maritime-inspired)
+# Layout color and sizing constants
 PRIMARY_COLOR = "#0A4B8C"       # Deep navy
 SECONDARY_COLOR = "#00B0B9"     # Marine cyan
 BACKGROUND_COLOR = "#F5F8FA"    # Light sky
 TEXT_COLOR = "#212121"
-SIDEBAR_BG = "#2c3e50"          # Dark navy for sidebar
+SIDEBAR_BG = "#2c3e50"          # Dark navy
 HIGHLIGHT_COLOR = "#FF6B35"     # Safety orange
 SIDEBAR_WIDTH = "350px"
 
@@ -121,9 +120,8 @@ def get_content():
 # MAIN LAYOUT
 ###############################################################################
 app.layout = html.Div([
-    # Add the missing store for financial data so that callbacks using "financial-data-store" work.
     dcc.Store(id="vessel-data-store"),
-    dcc.Store(id="emissions-data-store"),
+    dcc.Store(id="api-data-store", storage_type="session"),
     dcc.Store(id="financial-data-store", storage_type="session"),
     dcc.Store(id="tab-switch"),
     html.Link(rel="stylesheet", href="https://use.fontawesome.com/releases/v5.15.4/css/all.css"),
@@ -200,7 +198,20 @@ def toggle_help_modal(n_open, n_close, is_open):
     return is_open
 
 ###############################################################################
-# REGISTER CALLBACKS FROM `callbacks.py` (Placed here to prevent circular imports)
+# AUTOMATIC TAB SWITCHING CALLBACK
+###############################################################################
+@app.callback(
+    Output("url", "pathname"),
+    Input("tab-switch", "data"),
+    prevent_initial_call=True
+)
+def switch_tab(tab_data):
+    if tab_data:
+        return "/" + tab_data
+    return no_update
+
+###############################################################################
+# REGISTER CALLBACKS FROM callbacks.py
 ###############################################################################
 from callbacks import register_callbacks
 register_callbacks(app)
