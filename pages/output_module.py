@@ -489,10 +489,10 @@ def get_future_output_table(api_data, conv_factor, currency):
 
     # Engine hours (hard-coded per sample)
     sailing_engine_hrs = 24
-    working_engine_hrs = 0
+    working_engine_hrs = 24
     idle_engine_hrs    = 24
-    shore_engine_hrs   = 0
-    avg_engine_hrs     = 12
+    shore_engine_hrs   = 24
+    avg_engine_hrs     = 24
 
     # Average SFC Data
     sfc_data = (future.get("average_sfc") or [{}])[0]
@@ -852,106 +852,294 @@ def get_future_output_table(api_data, conv_factor, currency):
     return html.Div(table, className="table-responsive")
 
 
+import dash_bootstrap_components as dbc
+from dash import html
+
+def safe_format_percentage(value):
+    """Format percentage safely (avoid negative signs if undesired, etc.)."""
+    if value is None:
+        return "-"
+    # Convert to integer or keep decimals as needed
+    return f"{value:.0f}%"  
+
+def style_savings(value):
+    """Return a CSS class for styling based on positive/negative savings."""
+    if value is None:
+        return ""
+    # Negative savings => red; positive savings => green
+    return "text-danger" if value < 0 else "text-success"
+
 def get_opex_comparison_table(api_data, currency, conv_factor):
-    # Extract conventional (current) values from "costs" and "fuel_price"
+    """
+    Build an OPEX comparison table using:
+      1) 'conventional' values from api_data["current_table"]
+      2) 'future' values from api_data["future_output_table"]
+      3) 'savings' & 'savings_perc' from api_data["opex_table"] (not calculated on the fly)
+
+    Rows:
+      1) Fuel / electricity
+      2) Financing
+      3) Maintenance
+      4) Spares / consumables
+      5) EU ETS
+      6) FuelEU
+      7) OPEX Total
+
+    Columns:
+      1) OPEX (row label)
+      2) per day (shows currency symbol)
+      3) Conventional
+      4) After measures
+      5) Savings (from the API)
+      6) Savings (%) (from the API)
+    """
+
+    # --------------------------------------------------------------------------
+    # 1) Extract "Conventional" (current) and "Future" (after measures) values
+    # --------------------------------------------------------------------------
     conventional = (api_data.get("current_table", {}).get("costs") or [{}])[0]
-    conv_fuel_eu = conventional.get("avg_fueleu_day", 0)
+    conv_fuel_price = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0]
+    conv_fuel_elec = conv_fuel_price.get("avg_fuel_price_day", 0)
+    conv_financing = conventional.get("avg_financing_day", 0)
     conv_maintenance = conventional.get("avg_engine_maintenance_costs_day", 0)
-    conv_spare = conventional.get("avg_spares_consumables_costs_per_engine_hour", 0)
-    
-    current_fuel_price = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0]
-    conv_fuel_price = current_fuel_price.get("avg_fuel_price_day", 0)
-    
-    # Extract future values from "costs" and "fuel_price"
+    conv_spares = conventional.get("spares_consumables_costs", 0)
+    conv_eu_ets = conventional.get("avg_eu_ets_day", 0)
+    conv_fuel_eu = conventional.get("avg_fueleu_day", 0)
+
     future = (api_data.get("future_output_table", {}).get("costs") or [{}])[0]
-    fut_fuel_eu = future.get("future_avg_fueleu_day", 0)
+    fut_fuel_price = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0]
+    fut_fuel_elec = fut_fuel_price.get("future_avg_fuel_price_day", 0)
+    fut_financing = future.get("future_avg_financing_day", 0)
     fut_maintenance = future.get("future_avg_engine_maintenance_costs_day", 0)
-    fut_spare = future.get("future_avg_spares_consumables_costs_day", 0)
-    
-    future_fuel_price = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0]
-    fut_fuel_price = future_fuel_price.get("future_avg_fuel_price_day", 0)
-    
-    # Build rows (note that a positive savings means conventional is higher)
+    fut_spares = future.get("future_avg_spares_consumables_costs_day", 0)
+    fut_eu_ets = future.get("future_avg_eu_ets_day", 0)
+    fut_fuel_eu = future.get("future_avg_fueleu_day", 0)
+
+    # --------------------------------------------------------------------------
+    # 2) Extract the "Savings" and "Savings_perc" directly from the API response
+    # --------------------------------------------------------------------------
+    opex_table = api_data.get("opex_table", {})
+    savings_data = (opex_table.get("Savings") or [{}])[0]
+    savings_perc_data = (opex_table.get("Savings_perc") or [{}])[0]
+
+    # If keys don’t exist, default to 0
+    fuel_elec_savings = savings_data.get("savings_fuel_price", 0)
+    fuel_elec_savings_perc = savings_perc_data.get("perc_savings_fuel_price", 0)
+
+    financing_savings = 0  # Not provided in the example JSON
+    financing_savings_perc = 0
+
+    maintenance_savings = savings_data.get("savings_maintenance_cost", 0)
+    maintenance_savings_perc = savings_perc_data.get("perc_savings_maintenance_cost", 0)
+
+    spares_savings = savings_data.get("savings_spare_cost", 0)
+    spares_savings_perc = savings_perc_data.get("perc_savings_spare_cost", 0)
+
+    eu_ets_savings = 0  # Not provided in the example JSON
+    eu_ets_savings_perc = 0
+
+    fueleu_savings = savings_data.get("savings_fuel_eu", 0)
+    fueleu_savings_perc = savings_perc_data.get("perc_savings_fuel_eu", 0)
+
+    # --------------------------------------------------------------------------
+    # 3) Build rows with 6 main rows + OPEX Total
+    #    (You can still compute OPEX Total if you want, or rely on the API.)
+    # --------------------------------------------------------------------------
     rows = [
-        {"metric": "Fuel / electricity", "conv": conv_fuel_eu, "fut": fut_fuel_eu},
-        {"metric": "Fuel Price", "conv": conv_fuel_price, "fut": fut_fuel_price},
-        {"metric": "Maintenance", "conv": conv_maintenance, "fut": fut_maintenance},
-        {"metric": "Spares / consumables", "conv": conv_spare, "fut": fut_spare},
+        {
+            "metric": "Fuel / electricity",
+            "conv": conv_fuel_elec,
+            "fut": fut_fuel_elec,
+            "savings": fuel_elec_savings,
+            "savings_perc": fuel_elec_savings_perc
+        },
+        {
+            "metric": "Financing",
+            "conv": conv_financing,
+            "fut": fut_financing,
+            "savings": financing_savings,
+            "savings_perc": financing_savings_perc
+        },
+        {
+            "metric": "Maintenance",
+            "conv": conv_maintenance,
+            "fut": fut_maintenance,
+            "savings": maintenance_savings,
+            "savings_perc": maintenance_savings_perc
+        },
+        {
+            "metric": "Spares / consumables",
+            "conv": conv_spares,
+            "fut": fut_spares,
+            "savings": spares_savings,
+            "savings_perc": spares_savings_perc
+        },
+        {
+            "metric": "EU ETS",
+            "conv": conv_eu_ets,
+            "fut": fut_eu_ets,
+            "savings": eu_ets_savings,
+            "savings_perc": eu_ets_savings_perc
+        },
+        {
+            "metric": "FuelEU",
+            "conv": conv_fuel_eu,
+            "fut": fut_fuel_eu,
+            "savings": fueleu_savings,
+            "savings_perc": fueleu_savings_perc
+        },
     ]
-    total_conv = sum(row["conv"] for row in rows)
-    total_fut = sum(row["fut"] for row in rows)
-    rows.append({"metric": "OPEX Total", "conv": total_conv, "fut": total_fut})
-    
+
+    # Optionally compute OPEX total from your conventional/future sums:
+    total_conv = sum(r["conv"] for r in rows)
+    total_fut = sum(r["fut"] for r in rows)
+    total_savings = sum(r["savings"] for r in rows)
+    # If you have an API-provided total, you can use that instead of computing.
+    # If you want to compute the total % from the sums:
+    # (Be aware the user said "don’t calculate the difference," but you may want
+    #  a total row. If your API doesn’t provide it, this is a fallback.)
+    if total_conv != 0:
+        total_savings_perc = (total_savings / total_conv) * 100
+    else:
+        total_savings_perc = 0
+
+    rows.append({
+        "metric": "OPEX Total",
+        "conv": total_conv,
+        "fut": total_fut,
+        "savings": total_savings,
+        "savings_perc": total_savings_perc
+    })
+
+    # --------------------------------------------------------------------------
+    # 4) Build the table rows
+    # --------------------------------------------------------------------------
     table_rows = []
     for row in rows:
-        conv_val = row["conv"]
-        fut_val = row["fut"]
-        savings = conv_val - fut_val
-        # Use (1 - fut/conv)*100 so that if future is 0 (saving 100%), percentage becomes 100%
-        perc = (1 - fut_val/conv_val) * 100 if conv_val != 0 else None
         table_rows.append(html.Tr([
             html.Td(row["metric"]),
-            html.Td(format_currency_value(conv_val, currency, conv_factor)),
-            html.Td(format_currency_value(fut_val, currency, conv_factor)),
-            html.Td(format_currency_value(savings, currency, conv_factor), className=style_savings(savings)),
-            html.Td(safe_format_percentage(perc), className=style_savings(perc))
+            html.Td(get_currency_symbol(currency)),  # "per day" symbol
+            html.Td(format_currency_value(row["conv"], currency, conv_factor)),
+            html.Td(format_currency_value(row["fut"], currency, conv_factor)),
+            html.Td(
+                format_currency_value(row["savings"], currency, conv_factor),
+                className=style_savings(row["savings"])
+            ),
+            html.Td(
+                safe_format_percentage(row["savings_perc"]),
+                className=style_savings(row["savings_perc"])
+            )
         ]))
-    
+
+    # --------------------------------------------------------------------------
+    # 5) Build table header and return the table
+    # --------------------------------------------------------------------------
     currency_symbol = get_currency_symbol(currency)
     header = html.Thead(html.Tr([
         html.Th("OPEX"),
+        html.Th("per day"),
         html.Th(f"Conventional ({currency_symbol}/day)"),
         html.Th(f"After measures ({currency_symbol}/day)"),
         html.Th(f"Savings ({currency_symbol}/day)"),
         html.Th("Savings (%)")
     ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
-    
-    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
+
+    table = dbc.Table(
+        [header, html.Tbody(table_rows)],
+        bordered=True, striped=True, hover=True
+    )
     return html.Div(table, className="table-responsive")
 
 
 def get_emissions_comparison_table(api_data):
+    # Get the current and future emissions data
     current = api_data.get("current_table", {})
     future = api_data.get("future_output_table", {})
+    emissions_table = api_data.get("emissions_table", {})
     
-    # Use the appropriate keys and defaults from the sample response.
+    # Get the savings data (from the API, not calculated on the fly)
+    savings_data = (emissions_table.get("Savings") or [{}])[0]
+    savings_perc_data = (emissions_table.get("Savings_perc") or [{}])[0]
+    
+    # Extract each metric using the appropriate keys and defaults
+    co2_ttw_conv = (current.get("co2_emission_ttw") or [{}])[0].get("avg_co2_ttw_day", 182084)
+    co2_ttw_fut  = (future.get("co2_emission_ttw") or [{}])[0].get("future_avg_co2_ttw_day", 127459)
+    co2_ttw_savings = savings_data.get("savings_avg_co2_ttw", 0)
+    co2_ttw_savings_perc = savings_perc_data.get("perc_savings_avg_co2_ttw", 0)
+
+    co2_wtw_conv = (current.get("co2_emission_wtw") or [{}])[0].get("avg_co2_wtw_day", 216479)
+    co2_wtw_fut  = (future.get("co2_emission_wtw") or [{}])[0].get("future_avg_co2_wtw_day", 155692)
+    co2_wtw_savings = savings_data.get("savings_avg_co2_wtw", 0)
+    co2_wtw_savings_perc = savings_perc_data.get("perc_savings_avg_co2_wtw", 0)
+
+    nox_conv = (current.get("nox_emission_ttw") or [{}])[0].get("avg_nox_ttw_day", 3070)
+    nox_fut  = (future.get("nox_emission_ttw") or [{}])[0].get("future_avg_nox_ttw_day", 2164)
+    nox_savings = savings_data.get("savings_avg_nox_ttw", 0)
+    nox_savings_perc = savings_perc_data.get("perc_savings_avg_nox_ttw", 0)
+
+    sox_conv = (current.get("sox_emission_ttw") or [{}])[0].get("avg_sox_ttw_day", 121)
+    sox_fut  = (future.get("sox_emission_ttw") or [{}])[0].get("future_avg_sox_ttw_day", 85)
+    sox_savings = savings_data.get("savings_avg_sox_ttw", 0)
+    sox_savings_perc = savings_perc_data.get("perc_savings_avg_sox_ttw", 0)
+
+    pm_conv = (current.get("pm_emission_ttw") or [{}])[0].get("avg_pm_ttw_day", 54)
+    pm_fut  = (future.get("pm_emission_ttw") or [{}])[0].get("future_avg_pm_ttw_day", 37)
+    pm_savings = savings_data.get("savings_avg_pm_ttw", 0)
+    pm_savings_perc = savings_perc_data.get("perc_savings_avg_pm_ttw", 0)
+
+    ch4_conv = (current.get("ch4_emission_ttw") or [{}])[0].get("avg_ch4_ttw_day", 3)
+    ch4_fut  = (future.get("ch4_emission_ttw") or [{}])[0].get("future_avg_ch4_ttw_day", 3)
+    ch4_savings = savings_data.get("savings_avg_ch4_ttw", 0)
+    ch4_savings_perc = savings_perc_data.get("savings_avg_ch4_ttw", 0)
+    
+    # Build the rows as a list of dictionaries
     rows = [
-        {"metric": "CO₂ Emissions TtW", 
-         "conv": (current.get("co2_emission_ttw") or [{}])[0].get("avg_co2_ttw_day", 330590),
-         "fut": (future.get("co2_emission_ttw") or [{}])[0].get("future_avg_co2_ttw_day", 231413)},
-        {"metric": "CO₂ Emissions WtW", 
-         "conv": (current.get("co2_emission_wtw") or [{}])[0].get("avg_co2_wtw_day", 393037),
-         "fut": (future.get("co2_emission_wtw") or [{}])[0].get("future_avg_co2_wtw_day", 288963)},
-        {"metric": "NOₓ Emissions TtW", 
-         "conv": (current.get("nox_emission_ttw") or [{}])[0].get("avg_nox_ttw_day", 5574),
-         "fut": (future.get("nox_emission_ttw") or [{}])[0].get("future_avg_nox_ttw_day", 4024)},
-        {"metric": "SOₓ Emissions TtW", 
-         "conv": (current.get("sox_emission_ttw") or [{}])[0].get("avg_sox_ttw_day", 219),
-         "fut": (future.get("sox_emission_ttw") or [{}])[0].get("future_avg_sox_ttw_day", 159)},
-        {"metric": "PM Emissions TtW", 
-         "conv": (current.get("pm_emission_ttw") or [{}])[0].get("avg_pm_ttw_day", 98),
-         "fut": (future.get("pm_emission_ttw") or [{}])[0].get("future_avg_pm_ttw_day", 71)},
-        {"metric": "CH₄ Emissions TtW", 
-         "conv": (current.get("ch4_emission_ttw") or [{}])[0].get("avg_ch4_ttw_day", 6),
-         "fut": (future.get("ch4_emission_ttw") or [{}])[0].get("future_avg_ch4_ttw_day", 6)},
+        {"metric": "CO₂ Emissions TtW", "conv": co2_ttw_conv, "fut": co2_ttw_fut, "savings": co2_ttw_savings, "savings_perc": co2_ttw_savings_perc},
+        {"metric": "CO₂ Emissions WtW", "conv": co2_wtw_conv, "fut": co2_wtw_fut, "savings": co2_wtw_savings, "savings_perc": co2_wtw_savings_perc},
+        {"metric": "NOₓ Emissions TtW", "conv": nox_conv, "fut": nox_fut, "savings": nox_savings, "savings_perc": nox_savings_perc},
+        {"metric": "SOₓ Emissions TtW", "conv": sox_conv, "fut": sox_fut, "savings": sox_savings, "savings_perc": sox_savings_perc},
+        {"metric": "PM Emissions TtW", "conv": pm_conv, "fut": pm_fut, "savings": pm_savings, "savings_perc": pm_savings_perc},
+        {"metric": "CH₄ Emissions TtW", "conv": ch4_conv, "fut": ch4_fut, "savings": ch4_savings, "savings_perc": ch4_savings_perc},
     ]
     
+    # Build table rows inline (using formatting within the loop)
     table_rows = []
     for row in rows:
-        conv_val = float(row["conv"]) if row["conv"] is not None else 0
-        fut_val = float(row["fut"]) if row["fut"] is not None else 0
-        savings = conv_val - fut_val
-        perc = (1 - fut_val/conv_val) * 100 if conv_val != 0 else None
-        table_rows.append(html.Tr([
-            html.Td(row["metric"]),
-            html.Td(format_number(conv_val)),
-            html.Td(format_number(fut_val)),
-            html.Td(format_number(savings), className=style_savings(savings)),
-            html.Td(safe_format_percentage(perc), className=style_savings(perc))
-        ]))
+        conv_val = float(row["conv"])
+        fut_val = float(row["fut"])
+        savings_val = float(row["savings"])
+        savings_perc_val = float(row["savings_perc"])
+        
+        # Format numbers with commas and no decimals
+        formatted_conv = f"{conv_val:,.0f}"
+        formatted_fut = f"{fut_val:,.0f}"
+        formatted_savings = f"{savings_val:,.0f}"
+        # Format percentage: if savings percentage is positive, display a negative sign (indicating reduction)
+        if savings_perc_val > 0:
+            formatted_perc = f"-{abs(savings_perc_val):.0f}%"
+        elif savings_perc_val < 0:
+            formatted_perc = f"+{abs(savings_perc_val):.0f}%"
+        else:
+            formatted_perc = "0%"
+        
+        # Determine CSS class for savings (red for negative values, green for positive)
+        style_class = "text-danger" if savings_val < 0 else "text-success"
+        perc_style_class = "text-danger" if savings_perc_val > 0 else "text-success"
+        
+        table_rows.append(
+            html.Tr([
+                html.Td(row["metric"]),
+                html.Td("kg"),
+                html.Td(formatted_conv),
+                html.Td(formatted_fut),
+                html.Td(formatted_savings, className=style_class),
+                html.Td(formatted_perc, className=perc_style_class)
+            ])
+        )
     
     header = html.Thead(html.Tr([
         html.Th("Emissions"),
+        html.Th("per day"),
         html.Th("Conventional (kg/day)"),
         html.Th("After measures (kg/day)"),
         html.Th("Savings (kg/day)"),
@@ -1224,7 +1412,7 @@ def dwelling_at_berth_pie_figure(api_data):
         hole=0.4,
         textinfo="label+value"
     ))
-    fig.update_layout(title="Current Berth Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
+    fig.update_layout(title="Current Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
     return fig
 
 def future_dwelling_at_berth_pie_figure(api_data):
@@ -1246,7 +1434,7 @@ def future_dwelling_at_berth_pie_figure(api_data):
         hole=0.4,
         textinfo="label+value"
     ))
-    fig.update_layout(title="Future Berth Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
+    fig.update_layout(title="Future Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
     return fig
 
 def dashboard_layout(api_data, currency):
