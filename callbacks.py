@@ -35,7 +35,6 @@ from pages.output_module import (
     spares_figure,
     opex_cost_figure,
     fuel_consumption_figure,
-    yearly_result_figure
 )
 
 def card_component(title, children):

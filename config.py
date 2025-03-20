@@ -10,7 +10,7 @@ FINANCIAL_ENDPOINT = f"{API_BASE}/financialmodelling"
 DEFAULT_VESSEL = {
     "imo": 9803613,
     "vessel_name": "MSC GRANDIOSA",
-    "vessel_category": "CRUISE_PASSENGER_SHIP",
+    "vessel_category": "Cruise ships",
     "gross_tonnage": 181541,
     "year_built": 2019,
     "cruising_speed": 21.3,  # Knots

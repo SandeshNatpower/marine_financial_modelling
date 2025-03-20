@@ -5,15 +5,14 @@ import pandas as pd
 # Define consistent styling constants
 PRIMARY_COLOR = "#0A4B8C"  # Deep navy for consistency
 TEXT_COLOR = "#212121"
-
 def layout():
-    # Load data from the CSV files in the data folder
+    # Load CSV data
     regulations = pd.read_csv('data/regulations.csv')
     prices_data = pd.read_csv('data/PRICES_DATA.csv')
     fuel_data = pd.read_csv('data/FUEL_DATA.csv')
     fueleu_data = pd.read_csv('data/FUELEU.csv')
     
-    # Define styling for the tables
+    # Define common table styles
     table_style = {
         'overflowX': 'auto',
         'border': '1px solid #ddd'
@@ -33,13 +32,10 @@ def layout():
         'fontSize': '16px'
     }
     data_conditional = [
-        {
-            'if': {'row_index': 'odd'},
-            'backgroundColor': 'rgb(248, 248, 248)'
-        }
+        {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
     ]
     
-    # Create a DataTable for the Regulations data
+    # Create tables
     regulations_table = dash_table.DataTable(
         id='regulations-table',
         columns=[{"name": col, "id": col} for col in regulations.columns],
@@ -51,7 +47,6 @@ def layout():
         style_data_conditional=data_conditional
     )
     
-    # Create a DataTable for the Fuel Prices data
     prices_table = dash_table.DataTable(
         id='prices-table',
         columns=[{"name": col, "id": col} for col in prices_data.columns],
@@ -63,7 +58,6 @@ def layout():
         style_data_conditional=data_conditional
     )
     
-    # Create a DataTable for the Fuel Data
     fuel_data_table = dash_table.DataTable(
         id='fuel-data-table',
         columns=[{"name": col, "id": col} for col in fuel_data.columns],
@@ -75,7 +69,6 @@ def layout():
         style_data_conditional=data_conditional
     )
     
-    # Create a DataTable for the FUELEU Data
     fueleu_data_table = dash_table.DataTable(
         id='fueleu-data-table',
         columns=[{"name": col, "id": col} for col in fueleu_data.columns],
@@ -87,68 +80,52 @@ def layout():
         style_data_conditional=data_conditional
     )
     
-    # Define cards for each dataset inside separate tabs
+    # Build tab cards for each dataset
     regulations_tab = dbc.Tab(
-        dbc.Card(
-            [
-                dbc.CardHeader(
-                    html.H4("IMO Regulations Database", style={"color": "white"}),
-                    style={"backgroundColor": PRIMARY_COLOR}
-                ),
-                dbc.CardBody(regulations_table)
-            ],
-            className="mb-4",
-            style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
-        ),
+        dbc.Card([
+            dbc.CardHeader(
+                html.H4("IMO Regulations Database", style={"color": "white", "margin": 0}),
+                style={"backgroundColor": PRIMARY_COLOR, "padding": "10px 20px"}
+            ),
+            dbc.CardBody(regulations_table)
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
         label="Regulations"
     )
     
     prices_tab = dbc.Tab(
-        dbc.Card(
-            [
-                dbc.CardHeader(
-                    html.H4("Fuel & Energy Prices Data", style={"color": "white"}),
-                    style={"backgroundColor": PRIMARY_COLOR}
-                ),
-                dbc.CardBody(prices_table)
-            ],
-            className="mb-4",
-            style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
-        ),
+        dbc.Card([
+            dbc.CardHeader(
+                html.H4("Fuel & Energy Prices Data", style={"color": "white", "margin": 0}),
+                style={"backgroundColor": PRIMARY_COLOR, "padding": "10px 20px"}
+            ),
+            dbc.CardBody(prices_table)
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
         label="Fuel Prices"
     )
     
     fuel_data_tab = dbc.Tab(
-        dbc.Card(
-            [
-                dbc.CardHeader(
-                    html.H4("Fuel Data", style={"color": "white"}),
-                    style={"backgroundColor": PRIMARY_COLOR}
-                ),
-                dbc.CardBody(fuel_data_table)
-            ],
-            className="mb-4",
-            style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
-        ),
+        dbc.Card([
+            dbc.CardHeader(
+                html.H4("Fuel Data", style={"color": "white", "margin": 0}),
+                style={"backgroundColor": PRIMARY_COLOR, "padding": "10px 20px"}
+            ),
+            dbc.CardBody(fuel_data_table)
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
         label="Fuel Data"
     )
     
     fueleu_data_tab = dbc.Tab(
-        dbc.Card(
-            [
-                dbc.CardHeader(
-                    html.H4("FUELEU Data", style={"color": "white"}),
-                    style={"backgroundColor": PRIMARY_COLOR}
-                ),
-                dbc.CardBody(fueleu_data_table)
-            ],
-            className="mb-4",
-            style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
-        ),
+        dbc.Card([
+            dbc.CardHeader(
+                html.H4("FUELEU Data", style={"color": "white", "margin": 0}),
+                style={"backgroundColor": PRIMARY_COLOR, "padding": "10px 20px"}
+            ),
+            dbc.CardBody(fueleu_data_table)
+        ], className="mb-4", style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}),
         label="FUELEU Data"
     )
     
     return dbc.Container([
-        html.H2("Regulatory & Prices Database", className="mb-4", style={"color": PRIMARY_COLOR}),
+        html.H2("Regulatory & Prices Database", className="mb-4", style={"color": PRIMARY_COLOR, "textAlign": "center"}),
         dbc.Tabs([regulations_tab, prices_tab, fuel_data_tab, fueleu_data_tab])
     ], fluid=True, className="py-4")

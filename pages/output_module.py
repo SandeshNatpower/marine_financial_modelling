@@ -1021,26 +1021,7 @@ def fuel_consumption_figure(api_data=None):
     set_figure_layout(fig, "Fuel Cost Comparison (2025-2050)", "Year", "Cost (USD)")
     return fig
 
-def yearly_result_figure(api_data=None):
-    """Create a bar chart for yearly financial results."""
-    if not api_data or "result" not in api_data:
-        return go.Figure().update_layout(title="No Data Available")
-    
-    results = sorted(api_data["result"], key=lambda x: x.get("year", 0))
-    years = [res["year"] for res in results]
-    values = [res["result"] for res in results]
-    
-    # Color-code bars: red for negative, green for positive
-    colors = ['#d62728' if v < 0 else '#2ca02c' for v in values]
-    fig = go.Figure(go.Bar(
-        x=years,
-        y=values,
-        marker_color=colors,
-        name="Net Result"
-    ))
-    
-    set_figure_layout(fig, "Yearly Financial Results", "Year", "Amount (USD)")
-    return fig
+
 
 def spares_figure(api_data=None):
     """Create a visualization for spares/consumables costs from 2025 to 2050."""
@@ -1293,12 +1274,7 @@ def dashboard_layout(api_data, currency):
                         config={"displayModeBar": False}
                     ), md=12)
                 ], className="mb-4"),
-                dbc.Row([
-                    dbc.Col(dcc.Graph(
-                        figure=yearly_result_figure(api_data), 
-                        config={"displayModeBar": False}
-                    ), md=12)
-                ], className="mb-4"),
+                
                 # Cashflow and Penalty Cost Charts
                 dbc.Row([
                     dbc.Col(dcc.Graph(
@@ -1311,6 +1287,19 @@ def dashboard_layout(api_data, currency):
                         figure=penalty_cost_figure(api_data), 
                         config={"displayModeBar": False}
                     ), md=12)
+                ], className="mb-4"),
+                                # Dwelling at Berth (Current vs Future) - Side by Side View
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=dwelling_at_berth_pie_figure(api_data),
+                        config={"displayModeBar": False},
+                        style={"width": "100%", "height": "600px"}
+                    ), md=6),
+                    dbc.Col(dcc.Graph(
+                        figure=future_dwelling_at_berth_pie_figure(api_data),
+                        config={"displayModeBar": False},
+                        style={"width": "100%", "height": "600px"}
+                    ), md=6)
                 ], className="mb-4"),
                 # Maintenance & Spares Cost Side by Side
                 dbc.Row([
@@ -1334,49 +1323,40 @@ def dashboard_layout(api_data, currency):
                         config={"displayModeBar": False}
                     ), md=6)
                 ], className="mb-4"),
-                # Dwelling at Berth (Current vs Future) - Side by Side View
-                dbc.Row([
-                    dbc.Col(dcc.Graph(
-                        figure=dwelling_at_berth_pie_figure(api_data),
-                        config={"displayModeBar": False},
-                        style={"width": "100%", "height": "600px"}
-                    ), md=6),
-                    dbc.Col(dcc.Graph(
-                        figure=future_dwelling_at_berth_pie_figure(api_data),
-                        config={"displayModeBar": False},
-                        style={"width": "100%", "height": "600px"}
-                    ), md=6)
-                ], className="mb-4"),
+
             ])
         ], className="mb-4")
     ], fluid=True)
 
 def layout():
     return dbc.Container([
-         html.H1("Key Output Metrics", className="mb-4", style={"color": "#0A4B8C"}),
-         dbc.Row([
-             dbc.Col([
-                 html.Label("Select Currency"),
-                 dcc.Dropdown(
-                     id="currency-choice",
-                     options=[{"label": key, "value": key} for key in config.CURRENCIES.keys()],
-                     value=list(config.CURRENCIES.keys())[0]
-                 )
-             ], md=6),
-             dbc.Col([
-                 html.Label("Select Tables"),
-                 dcc.Checklist(
-                     id="table-selection-dropdown",
-                     options=[
-                         {"label": "Current Output", "value": "current"},
-                         {"label": "Future Output", "value": "future"},
-                         {"label": "OPEX Comparison", "value": "opex"},
-                         {"label": "Emissions Comparison", "value": "emissions"}
-                     ],
-                     value=["opex", "emissions"],
-                     labelStyle={"display": "inline-block", "marginRight": "10px"}
-                 )
-             ], md=6)
-         ], className="mb-4"),
-         html.Div(id="output-content")
-    ], fluid=True)
+        html.H1("Key Output Metrics", className="mb-4", style={"color": "#0A4B8C", "textAlign": "center"}),
+        dbc.Row([
+            dbc.Col([
+                html.Label("Select Currency", className="font-weight-bold"),
+                dcc.Dropdown(
+                    id="currency-choice",
+                    options=[{"label": key, "value": key} for key in config.CURRENCIES.keys()],
+                    value=list(config.CURRENCIES.keys())[0],
+                    clearable=False,
+                    style={"marginBottom": "15px"}
+                )
+            ], md=6, xs=12),
+            dbc.Col([
+                html.Label("Select Tables", className="font-weight-bold"),
+                dcc.Checklist(
+                    id="table-selection-dropdown",
+                    options=[
+                        {"label": "Current Output", "value": "current"},
+                        {"label": "Future Output", "value": "future"},
+                        {"label": "OPEX Comparison", "value": "opex"},
+                        {"label": "Emissions Comparison", "value": "emissions"}
+                    ],
+                    value=["opex", "emissions"],
+                    labelStyle={"display": "inline-block", "marginRight": "10px"},
+                    inputStyle={"marginRight": "5px"}
+                )
+            ], md=6, xs=12)
+        ], className="mb-4"),
+        html.Div(id="output-content", style={"padding": "20px", "backgroundColor": "#f8f9fa", "borderRadius": "8px"})
+    ], fluid=True, className="py-4")
