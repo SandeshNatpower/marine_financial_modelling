@@ -27,15 +27,6 @@ def format_days(day_value):
     return f"{day_value} days / year"
 
 
-
-def format_currency_value(value, currency, conv_factor):
-    try:
-        value = float(value) * conv_factor
-        return f"{format_number(value)}"
-    except (ValueError, TypeError):
-        return str(value)
-
-
 def get_currency_symbol(currency):
     """Retrieve currency symbol from config; if not found, return the currency itself."""
     return config.CURRENCIES.get(currency, {}).get("symbol", currency)
