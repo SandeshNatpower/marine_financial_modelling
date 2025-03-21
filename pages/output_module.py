@@ -9,11 +9,14 @@ import numpy as np
 MARGIN_STYLE = dict(l=60, r=30, t=60, b=50)
 TEMPLATE_STYLE = "plotly_white"
 
-# =============================================================================
-# HELPER FUNCTIONS FOR FORMATTING & TABLES
-# =============================================================================
+import dash
+from dash import html
+import dash_bootstrap_components as dbc
+import config
 
-    
+# =============================================================================
+# HELPER FUNCTION
+# =============================================================================
 def format_number(value):
     """Formats a number with commas (e.g., 123456 -> '123,456')."""
     if value is None:
@@ -26,50 +29,17 @@ def format_days(day_value):
         return "-"
     return f"{day_value} days / year"
 
-
 def get_currency_symbol(currency):
     """Retrieve currency symbol from config; if not found, return the currency itself."""
     return config.CURRENCIES.get(currency, {}).get("symbol", currency)
 
-def format_currency_value(value, currency, conv_factor):
-    """
-    Converts and formats a numeric value as a currency value.
-    (Note: In cost rows, we no longer prepend the currency symbol.)
-    """
-    try:
-        value = float(value) * conv_factor
-        return f"{format_number(value)}"
-    except (ValueError, TypeError):
-        return str(value)
-
-
-
-def style_savings(val):
-    try:
-        if val is None:
-            return ""
-        num = float(val)
-        return "text-success fw-bold" if num > 0 else "text-danger fw-bold" if num < 0 else ""
-    except (ValueError, TypeError):
-        return ""
-
-def safe_format_percentage(val):
-    try:
-        if isinstance(val, (int, float)) and val is not None:
-            return f"{val:.1f}%"
-        return "N/A"
-    except (ValueError, TypeError):
-        return "N/A"
-
 # =============================================================================
 # TABLE FUNCTIONS
 # =============================================================================
-
-def get_current_output_table(api_data, conv_factor, currency):
+def get_current_output_table(api_data, currency):
     current = api_data.get("current_table", {})
 
     # ----- Header Days (override Idle and Shore as per sample) -----
-    # Use API values if available; otherwise override with sample values.
     working_days_data = (current.get("working_days") or [{}])[0]
     sailing_days = working_days_data.get("sailing_days", 175)      # sample: 175
     working_days = working_days_data.get("working_days", 165)      # sample: 165
@@ -78,7 +48,6 @@ def get_current_output_table(api_data, conv_factor, currency):
 
     # ----- Engine / Power -----
     eng_data = (current.get("enginge_power") or [{}])[0]
-    # For "Max. power" row, we use:
     sailing_power = eng_data.get("sailing_power", 32000)
     working_power = eng_data.get("working_power", 19200)
     idle_power    = eng_data.get("idle_power", 6320)
@@ -90,11 +59,9 @@ def get_current_output_table(api_data, conv_factor, currency):
     sailing_energy = power_day.get("sailing_energy_req_kwh_day", 768000)
     working_energy = power_day.get("working_energy_req_kwh_day", 460800)
     idle_energy    = power_day.get("idle_energy_req_kwh_day", 151680)
-    # "Average" energy per day from API:
     avg_energy     = power_day.get("power_req_day", 521578)
 
     # ----- Engine Hours -----
-    # (Hard-coded as in sample)
     sailing_hrs = 24
     working_hrs = 24
     idle_hrs    = 24
@@ -120,7 +87,7 @@ def get_current_output_table(api_data, conv_factor, currency):
     idle_fuel_l    = liter_data.get("idle_fuel_consumption_liter", 34338)
     avg_fuel_l     = liter_data.get("avg_fuel_consumption_liter_day", 114112)
 
-    # Fuel consumption (kWh) – we reuse energy requirement values:
+    # Fuel consumption (kWh) – reuse energy requirement values
     sailing_fuel_kwh = sailing_energy
     working_fuel_kwh = working_energy
     idle_fuel_kwh    = idle_energy
@@ -180,26 +147,13 @@ def get_current_output_table(api_data, conv_factor, currency):
     engine_maintenance = cost_data.get("engine_maintenance_costs", 480)
     spares_costs       = cost_data.get("spares_consumables_costs", 48)
     fueleu_penalty     = cost_data.get("fueleu_current_penalty", 1999)
-    # For Financing and EU ETS, default to 0
-    financing = 0
-    euets = 0
+    financing          = 0
+    euets              = 0
 
-    maintenance_sailing = engine_maintenance
-    maintenance_working = engine_maintenance
-    maintenance_idle    = engine_maintenance
-    maintenance_avg     = cost_data.get("avg_engine_maintenance_costs_day", engine_maintenance)
+    maintenance_avg = cost_data.get("avg_engine_maintenance_costs_day", engine_maintenance)
+    spares_avg      = cost_data.get("avg_spares_consumables_costs_day", spares_costs)
+    fueleu_avg      = cost_data.get("avg_fueleu_day", fueleu_penalty)
 
-    spares_sailing = spares_costs
-    spares_working = spares_costs
-    spares_idle    = spares_costs
-    spares_avg     = cost_data.get("avg_spares_consumables_costs_day", spares_costs)
-
-    fueleu_sailing = fueleu_penalty
-    fueleu_working = fueleu_penalty
-    fueleu_idle    = fueleu_penalty
-    fueleu_avg     = cost_data.get("avg_fueleu_day", fueleu_penalty)
-
-    # ----- OPEX Current -----
     opex_day_data = (current.get("opex_day") or [{}])[0]
     sailing_opex_day = opex_day_data.get("sailing_opex_day", 137487)
     working_opex_day = opex_day_data.get("working_opex_day", 96247)
@@ -224,17 +178,16 @@ def get_current_output_table(api_data, conv_factor, currency):
         ]),
         html.Tr([
             html.Th("", colSpan=2),
-            html.Th(f"{sailing_days} days / year"),
-            html.Th(f"{working_days} days / year"),
-            html.Th(f"{idle_days} days / year"),
-            html.Th(f"{shore_days} days / year"),
+            html.Th(format_days(sailing_days)),
+            html.Th(format_days(working_days)),
+            html.Th(format_days(idle_days)),
+            html.Th(format_days(shore_days)),
             html.Th("per day")
         ])
     ])
 
     # ----- Build Table Body -----
     table_body = html.Tbody([
-
         # Block 1: Power & Energy
         html.Tr([
             html.Td("Max. power"),
@@ -281,6 +234,7 @@ def get_current_output_table(api_data, conv_factor, currency):
             html.Td("-"),
             html.Td(format_number(avg_sfc))
         ]),
+        # Block 1: Fuel Consumption (kg, liters, kWh)
         html.Tr([
             html.Td("Fuel consumption"),
             html.Td("kg"),
@@ -308,7 +262,6 @@ def get_current_output_table(api_data, conv_factor, currency):
             html.Td("-"),
             html.Td(format_number(avg_fuel_kwh))
         ]),
-
         # Block 2: Emissions
         html.Tr([
             html.Td("CO2 Emissions TtW"),
@@ -373,20 +326,19 @@ def get_current_output_table(api_data, conv_factor, currency):
             html.Td("-"),
             html.Td(format_number(avg_n2o))
         ]),
-
         # Block 3: Costs
         html.Tr([
             html.Td("Fuel"),
-            html.Td(f"{get_currency_symbol(currency)}"),
-            html.Td(format_currency_value(sailing_fuel_price, currency, conv_factor)),
-            html.Td(format_currency_value(working_fuel_price, currency, conv_factor)),
-            html.Td(format_currency_value(idle_fuel_price, currency, conv_factor)),
+            html.Td(get_currency_symbol(currency)),
+            html.Td(format_number(sailing_fuel_price)),
+            html.Td(format_number(working_fuel_price)),
+            html.Td(format_number(idle_fuel_price)),
             html.Td("-"),
-            html.Td(format_currency_value(avg_fuel_price, currency, conv_factor))
+            html.Td(format_number(avg_fuel_price))
         ]),
         html.Tr([
             html.Td("Financing"),
-            html.Td(f"{get_currency_symbol(currency)}"),
+            html.Td(get_currency_symbol(currency)),
             html.Td(format_number(financing)),
             html.Td(format_number(financing)),
             html.Td(format_number(financing)),
@@ -395,25 +347,25 @@ def get_current_output_table(api_data, conv_factor, currency):
         ]),
         html.Tr([
             html.Td("Maintenance"),
-            html.Td(f"{get_currency_symbol(currency)}"),
-            html.Td(format_currency_value(maintenance_sailing, currency, conv_factor)),
-            html.Td(format_currency_value(maintenance_working, currency, conv_factor)),
-            html.Td(format_currency_value(maintenance_idle, currency, conv_factor)),
+            html.Td(get_currency_symbol(currency)),
+            html.Td(format_number(engine_maintenance)),
+            html.Td(format_number(engine_maintenance)),
+            html.Td(format_number(engine_maintenance)),
             html.Td("-"),
-            html.Td(format_currency_value(maintenance_avg, currency, conv_factor))
+            html.Td(format_number(maintenance_avg))
         ]),
         html.Tr([
             html.Td("Spares / consumables"),
-            html.Td(f"{get_currency_symbol(currency)}"),
-            html.Td(format_currency_value(spares_sailing, currency, conv_factor)),
-            html.Td(format_currency_value(spares_working, currency, conv_factor)),
-            html.Td(format_currency_value(spares_idle, currency, conv_factor)),
+            html.Td(get_currency_symbol(currency)),
+            html.Td(format_number(spares_costs)),
+            html.Td(format_number(spares_costs)),
+            html.Td(format_number(spares_costs)),
             html.Td("-"),
-            html.Td(format_currency_value(spares_avg, currency, conv_factor))
+            html.Td(format_number(spares_avg))
         ]),
         html.Tr([
             html.Td("EU ETS"),
-            html.Td(f"{get_currency_symbol(currency)}"),
+            html.Td(get_currency_symbol(currency)),
             html.Td(format_number(euets)),
             html.Td(format_number(euets)),
             html.Td(format_number(euets)),
@@ -422,31 +374,30 @@ def get_current_output_table(api_data, conv_factor, currency):
         ]),
         html.Tr([
             html.Td("FuelEU"),
-            html.Td(f"{get_currency_symbol(currency)}"),
-            html.Td(format_currency_value(fueleu_sailing, currency, conv_factor)),
-            html.Td(format_currency_value(fueleu_working, currency, conv_factor)),
-            html.Td(format_currency_value(fueleu_idle, currency, conv_factor)),
+            html.Td(get_currency_symbol(currency)),
+            html.Td(format_number(fueleu_penalty)),
+            html.Td(format_number(fueleu_penalty)),
+            html.Td(format_number(fueleu_penalty)),
             html.Td(""),
-            html.Td(format_currency_value(fueleu_avg, currency, conv_factor))
+            html.Td(format_number(fueleu_avg))
         ]),
-
         # Block 4: OPEX Current (2 rows)
         html.Tr([
             html.Td("OPEX Current", rowSpan=2),
             html.Td(f"{get_currency_symbol(currency)} per day"),
-            html.Td(format_currency_value(sailing_opex_day, currency, conv_factor)),
-            html.Td(format_currency_value(working_opex_day, currency, conv_factor)),
-            html.Td(format_currency_value(idle_opex_day, currency, conv_factor)),
+            html.Td(format_number(sailing_opex_day)),
+            html.Td(format_number(working_opex_day)),
+            html.Td(format_number(idle_opex_day)),
             html.Td("-"),
-            html.Td(format_currency_value(avg_opex_day, currency, conv_factor))
+            html.Td(format_number(avg_opex_day))
         ]),
         html.Tr([
             html.Td(f"{get_currency_symbol(currency)} per year"),
-            html.Td(format_currency_value(sailing_opex_year, currency, conv_factor)),
-            html.Td(format_currency_value(working_opex_year, currency, conv_factor)),
-            html.Td(format_currency_value(idle_opex_year, currency, conv_factor)),
+            html.Td(format_number(sailing_opex_year)),
+            html.Td(format_number(working_opex_year)),
+            html.Td(format_number(idle_opex_year)),
             html.Td("-"),
-            html.Td(format_currency_value(avg_opex_year, currency, conv_factor))
+            html.Td(format_number(avg_opex_year))
         ])
     ])
 
@@ -460,7 +411,42 @@ def get_current_output_table(api_data, conv_factor, currency):
 
     return html.Div(table, className="table-responsive")
 
-def get_future_output_table(api_data, conv_factor, currency):
+import dash_bootstrap_components as dbc
+from dash import html
+import config
+
+def format_number(value):
+    """Formats a number with commas (e.g., 123456 -> '123,456')."""
+    if value is None:
+        return "-"
+    return f"{value:,.0f}"
+
+def format_days(day_value):
+    """Formats the day value for header display."""
+    if day_value is None:
+        return "-"
+    return f"{day_value} days / year"
+
+def get_currency_symbol(currency):
+    """Retrieve currency symbol from config; if not found, return the currency itself."""
+    return config.CURRENCIES.get(currency, {}).get("symbol", currency)
+
+def safe_format_percentage(value):
+    """Format percentage safely."""
+    if value is None:
+        return "-"
+    return f"{value:.0f}%"
+
+def style_savings(value):
+    """Return a CSS class for styling based on positive/negative savings."""
+    if value is None:
+        return ""
+    return "text-danger" if value < 0 else "text-success"
+
+# ---------------------------------------------------------------------------
+# Future Output Table
+# ---------------------------------------------------------------------------
+def get_future_output_table(api_data, currency):
     future = api_data.get("future_output_table", {})
 
     # Days information from API
@@ -476,10 +462,9 @@ def get_future_output_table(api_data, conv_factor, currency):
     sailing_power = power_data.get("sailing_power", 19200)
     working_power = power_data.get("working_power", 11520)
     idle_power    = power_data.get("idle_power", 798)
-    # Use the provided shore power (or 0 if not available)
     shore_power   = power_data.get("shore_power", 0)
     
-    # Energy Requirement Data (from power_calc_day)
+    # Energy Requirement Data
     energy_data = (future.get("power_calc_day") or [{}])[0]
     sailing_energy = energy_data.get("sailing_energy_req_kwh_day", 460800)
     working_energy = energy_data.get("working_energy_req_kwh_day", 276480)
@@ -487,7 +472,7 @@ def get_future_output_table(api_data, conv_factor, currency):
     shore_energy   = energy_data.get("shore_energy_req_kwh_day", 0)
     avg_energy     = int((sailing_energy + working_energy + idle_energy + shore_energy) / 4.0)
 
-    # Engine hours (hard-coded per sample)
+    # Engine hours (hard-coded)
     sailing_engine_hrs = 24
     working_engine_hrs = 24
     idle_engine_hrs    = 24
@@ -499,7 +484,6 @@ def get_future_output_table(api_data, conv_factor, currency):
     sailing_sfc = sfc_data.get("sailing_avg_sfc", 191)
     working_sfc = sfc_data.get("working_avg_sfc", 221)
     idle_sfc    = sfc_data.get("idle_avg_sfc", 202)
-    # Since no shore SFC is provided, average over three states
     avg_sfc     = int((sailing_sfc + working_sfc + idle_sfc) / 3.0)
 
     # Fuel consumption in kg
@@ -515,7 +499,7 @@ def get_future_output_table(api_data, conv_factor, currency):
     sailing_fuel_l = fuel_data.get("future_sailing_fuel_consumption_liter", 99761)
     working_fuel_l = fuel_data.get("future_working_fuel_consumption_liter", 69277)
     idle_fuel_l    = fuel_data.get("future_idle_fuel_consumption_liter", 4336)
-    shore_fuel_l   = 0  # Not provided in sample; assume 0
+    shore_fuel_l   = 0  # Assume 0
     avg_fuel_l     = fuel_data.get("future_avg_fuel_consumption_liter_day", 63479)
 
     # Fuel consumption in kWh (using energy requirement values)
@@ -575,7 +559,7 @@ def get_future_output_table(api_data, conv_factor, currency):
     shore_fuel_price   = fuel_price_data.get("future_shore_fuel_price", 0)
     avg_fuel_price     = fuel_price_data.get("future_avg_fuel_price_day", 55616)
 
-    # Costs – Maintenance and Spares from costs key
+    # Costs – Maintenance and Spares
     costs_data = (future.get("costs") or [{}])[0]
     maintenance_sailing = costs_data.get("engine_maintenance_costs", 480)
     maintenance_working = costs_data.get("engine_maintenance_costs", 480)
@@ -636,7 +620,7 @@ def get_future_output_table(api_data, conv_factor, currency):
             html.Td(format_number(shore_power) if shore_power else "-"),
             html.Td(format_number(max_power))
         ]),
-        # Average power (assuming same as operating modes, no overall average provided)
+        # Average power
         html.Tr([
             html.Td("Average power"),
             html.Td("kW"),
@@ -708,7 +692,7 @@ def get_future_output_table(api_data, conv_factor, currency):
         ]),
         # CO2 Emissions TtW
         html.Tr([
-            html.Td("CO2 Emissions TtW"),
+            html.Td("CO₂ Emissions TtW"),
             html.Td("kg"),
             html.Td(format_number(sailing_co2_ttw)),
             html.Td(format_number(working_co2_ttw)),
@@ -718,7 +702,7 @@ def get_future_output_table(api_data, conv_factor, currency):
         ]),
         # CO2 Emissions WtW
         html.Tr([
-            html.Td("CO2 Emissions WtW"),
+            html.Td("CO₂ Emissions WtW"),
             html.Td("kg"),
             html.Td(format_number(sailing_co2_wtw)),
             html.Td(format_number(working_co2_wtw)),
@@ -728,7 +712,7 @@ def get_future_output_table(api_data, conv_factor, currency):
         ]),
         # NOx Emissions TtW
         html.Tr([
-            html.Td("NOx Emissions TtW"),
+            html.Td("NOₓ Emissions TtW"),
             html.Td("kg"),
             html.Td(format_number(sailing_nox)),
             html.Td(format_number(working_nox)),
@@ -738,7 +722,7 @@ def get_future_output_table(api_data, conv_factor, currency):
         ]),
         # SOx Emissions TtW
         html.Tr([
-            html.Td("SOx Emissions TtW"),
+            html.Td("SOₓ Emissions TtW"),
             html.Td("kg"),
             html.Td(format_number(sailing_sox)),
             html.Td(format_number(working_sox)),
@@ -758,7 +742,7 @@ def get_future_output_table(api_data, conv_factor, currency):
         ]),
         # CH4 Emissions TtW
         html.Tr([
-            html.Td("CH4 Emissions TtW"),
+            html.Td("CH₄ Emissions TtW"),
             html.Td("kg"),
             html.Td(format_number(sailing_ch4)),
             html.Td(format_number(working_ch4)),
@@ -766,16 +750,17 @@ def get_future_output_table(api_data, conv_factor, currency):
             html.Td("0"),
             html.Td(format_number(avg_ch4))
         ]),
-        # Cost rows (currency symbol is now only in the row header)
+        # Cost rows – Fuel / electricity
         html.Tr([
             html.Td("Fuel / electricity"),
             html.Td(get_currency_symbol(currency)),
-            html.Td(format_number(sailing_fuel_price * conv_factor)),
-            html.Td(format_number(working_fuel_price * conv_factor)),
-            html.Td(format_number(idle_fuel_price * conv_factor)),
-            html.Td(format_number(shore_fuel_price * conv_factor)),
-            html.Td(format_number(avg_fuel_price * conv_factor))
+            html.Td(format_number(sailing_fuel_price)),
+            html.Td(format_number(working_fuel_price)),
+            html.Td(format_number(idle_fuel_price)),
+            html.Td(format_number(shore_fuel_price)),
+            html.Td(format_number(avg_fuel_price))
         ]),
+        # Financing row
         html.Tr([
             html.Td("Financing"),
             html.Td(get_currency_symbol(currency)),
@@ -785,24 +770,27 @@ def get_future_output_table(api_data, conv_factor, currency):
             html.Td(format_number(0)),
             html.Td(format_number(0))
         ]),
+        # Maintenance row
         html.Tr([
             html.Td("Maintenance"),
             html.Td(get_currency_symbol(currency)),
-            html.Td(format_number(maintenance_sailing * conv_factor)),
-            html.Td(format_number(maintenance_working * conv_factor)),
-            html.Td(format_number(maintenance_idle * conv_factor)),
+            html.Td(format_number(maintenance_sailing)),
+            html.Td(format_number(maintenance_working)),
+            html.Td(format_number(maintenance_idle)),
             html.Td(""),
-            html.Td(format_number(maintenance_avg * conv_factor))
+            html.Td(format_number(maintenance_avg))
         ]),
+        # Spares / consumables row
         html.Tr([
             html.Td("Spares / consumables"),
             html.Td(get_currency_symbol(currency)),
-            html.Td(format_number(spares_sailing * conv_factor)),
-            html.Td(format_number(spares_working * conv_factor)),
-            html.Td(format_number(spares_idle * conv_factor)),
-            html.Td(format_number(spares_shore * conv_factor)),
-            html.Td(format_number(spares_avg * conv_factor))
+            html.Td(format_number(spares_sailing)),
+            html.Td(format_number(spares_working)),
+            html.Td(format_number(spares_idle)),
+            html.Td(format_number(spares_shore)),
+            html.Td(format_number(spares_avg))
         ]),
+        # EU ETS row
         html.Tr([
             html.Td("EU ETS"),
             html.Td(get_currency_symbol(currency)),
@@ -812,6 +800,7 @@ def get_future_output_table(api_data, conv_factor, currency):
             html.Td(format_number(0)),
             html.Td(format_number(0))
         ]),
+        # FuelEU row
         html.Tr([
             html.Td("FuelEU"),
             html.Td(get_currency_symbol(currency)),
@@ -825,19 +814,19 @@ def get_future_output_table(api_data, conv_factor, currency):
         html.Tr([
             html.Td("OPEX Future", rowSpan=2),
             html.Td(f"{get_currency_symbol(currency)} per day"),
-            html.Td(format_number(sailing_opex_day * conv_factor)),
-            html.Td(format_number(working_opex_day * conv_factor)),
-            html.Td(format_number(idle_opex_day * conv_factor)),
-            html.Td(format_number(shore_opex_day * conv_factor)),
-            html.Td(format_number(avg_opex_day * conv_factor))
+            html.Td(format_number(sailing_opex_day)),
+            html.Td(format_number(working_opex_day)),
+            html.Td(format_number(idle_opex_day)),
+            html.Td(format_number(shore_opex_day)),
+            html.Td(format_number(avg_opex_day))
         ]),
         html.Tr([
             html.Td(f"{get_currency_symbol(currency)} per year"),
-            html.Td(format_number(sailing_opex_year * conv_factor)),
-            html.Td(format_number(working_opex_year * conv_factor)),
-            html.Td(format_number(idle_opex_year * conv_factor)),
-            html.Td(format_number(shore_opex_year * conv_factor)),
-            html.Td(format_number(avg_opex_year * conv_factor))
+            html.Td(format_number(sailing_opex_year)),
+            html.Td(format_number(working_opex_year)),
+            html.Td(format_number(idle_opex_year)),
+            html.Td(format_number(shore_opex_year)),
+            html.Td(format_number(avg_opex_year))
         ])
     ])
 
@@ -851,55 +840,19 @@ def get_future_output_table(api_data, conv_factor, currency):
 
     return html.Div(table, className="table-responsive")
 
-
-import dash_bootstrap_components as dbc
-from dash import html
-
-def safe_format_percentage(value):
-    """Format percentage safely (avoid negative signs if undesired, etc.)."""
-    if value is None:
-        return "-"
-    # Convert to integer or keep decimals as needed
-    return f"{value:.0f}%"  
-
-def style_savings(value):
-    """Return a CSS class for styling based on positive/negative savings."""
-    if value is None:
-        return ""
-    # Negative savings => red; positive savings => green
-    return "text-danger" if value < 0 else "text-success"
-
-def get_opex_comparison_table(api_data, currency, conv_factor):
+# ---------------------------------------------------------------------------
+# OPEX Comparison Table
+# ---------------------------------------------------------------------------
+def get_opex_comparison_table(api_data, currency):
     """
     Build an OPEX comparison table using:
       1) 'conventional' values from api_data["current_table"]
       2) 'future' values from api_data["future_output_table"]
-      3) 'savings' & 'savings_perc' from api_data["opex_table"] (not calculated on the fly)
-
-    Rows:
-      1) Fuel / electricity
-      2) Financing
-      3) Maintenance
-      4) Spares / consumables
-      5) EU ETS
-      6) FuelEU
-      7) OPEX Total
-
-    Columns:
-      1) OPEX (row label)
-      2) per day (shows currency symbol)
-      3) Conventional
-      4) After measures
-      5) Savings (from the API)
-      6) Savings (%) (from the API)
+      3) 'savings' & 'savings_perc' from api_data["opex_table"]
     """
-
-    # --------------------------------------------------------------------------
-    # 1) Extract "Conventional" (current) and "Future" (after measures) values
-    # --------------------------------------------------------------------------
+    # 1) Extract Conventional (current) and Future (after measures) values
     conventional = (api_data.get("current_table", {}).get("costs") or [{}])[0]
-    conv_fuel_price = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0]
-    conv_fuel_elec = conv_fuel_price.get("avg_fuel_price_day", 0)
+    conv_fuel_price = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0].get("avg_fuel_price_day", 0)
     conv_financing = conventional.get("avg_financing_day", 0)
     conv_maintenance = conventional.get("avg_engine_maintenance_costs_day", 0)
     conv_spares = conventional.get("spares_consumables_costs", 0)
@@ -907,26 +860,22 @@ def get_opex_comparison_table(api_data, currency, conv_factor):
     conv_fuel_eu = conventional.get("avg_fueleu_day", 0)
 
     future = (api_data.get("future_output_table", {}).get("costs") or [{}])[0]
-    fut_fuel_price = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0]
-    fut_fuel_elec = fut_fuel_price.get("future_avg_fuel_price_day", 0)
+    fut_fuel_price = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0].get("future_avg_fuel_price_day", 0)
     fut_financing = future.get("future_avg_financing_day", 0)
     fut_maintenance = future.get("future_avg_engine_maintenance_costs_day", 0)
     fut_spares = future.get("future_avg_spares_consumables_costs_day", 0)
     fut_eu_ets = future.get("future_avg_eu_ets_day", 0)
     fut_fuel_eu = future.get("future_avg_fueleu_day", 0)
 
-    # --------------------------------------------------------------------------
-    # 2) Extract the "Savings" and "Savings_perc" directly from the API response
-    # --------------------------------------------------------------------------
+    # 2) Extract the Savings and Savings_perc from API
     opex_table = api_data.get("opex_table", {})
     savings_data = (opex_table.get("Savings") or [{}])[0]
     savings_perc_data = (opex_table.get("Savings_perc") or [{}])[0]
 
-    # If keys don’t exist, default to 0
     fuel_elec_savings = savings_data.get("savings_fuel_price", 0)
     fuel_elec_savings_perc = savings_perc_data.get("perc_savings_fuel_price", 0)
 
-    financing_savings = 0  # Not provided in the example JSON
+    financing_savings = 0
     financing_savings_perc = 0
 
     maintenance_savings = savings_data.get("savings_maintenance_cost", 0)
@@ -935,21 +884,18 @@ def get_opex_comparison_table(api_data, currency, conv_factor):
     spares_savings = savings_data.get("savings_spare_cost", 0)
     spares_savings_perc = savings_perc_data.get("perc_savings_spare_cost", 0)
 
-    eu_ets_savings = 0  # Not provided in the example JSON
+    eu_ets_savings = 0
     eu_ets_savings_perc = 0
 
     fueleu_savings = savings_data.get("savings_fuel_eu", 0)
     fueleu_savings_perc = savings_perc_data.get("perc_savings_fuel_eu", 0)
 
-    # --------------------------------------------------------------------------
-    # 3) Build rows with 6 main rows + OPEX Total
-    #    (You can still compute OPEX Total if you want, or rely on the API.)
-    # --------------------------------------------------------------------------
+    # 3) Build rows
     rows = [
         {
             "metric": "Fuel / electricity",
-            "conv": conv_fuel_elec,
-            "fut": fut_fuel_elec,
+            "conv": conv_fuel_price,
+            "fut": fut_fuel_price,
             "savings": fuel_elec_savings,
             "savings_perc": fuel_elec_savings_perc
         },
@@ -990,18 +936,10 @@ def get_opex_comparison_table(api_data, currency, conv_factor):
         },
     ]
 
-    # Optionally compute OPEX total from your conventional/future sums:
     total_conv = sum(r["conv"] for r in rows)
     total_fut = sum(r["fut"] for r in rows)
     total_savings = sum(r["savings"] for r in rows)
-    # If you have an API-provided total, you can use that instead of computing.
-    # If you want to compute the total % from the sums:
-    # (Be aware the user said "don’t calculate the difference," but you may want
-    #  a total row. If your API doesn’t provide it, this is a fallback.)
-    if total_conv != 0:
-        total_savings_perc = (total_savings / total_conv) * 100
-    else:
-        total_savings_perc = 0
+    total_savings_perc = (total_savings / total_conv * 100) if total_conv != 0 else 0
 
     rows.append({
         "metric": "OPEX Total",
@@ -1011,57 +949,52 @@ def get_opex_comparison_table(api_data, currency, conv_factor):
         "savings_perc": total_savings_perc
     })
 
-    # --------------------------------------------------------------------------
-    # 4) Build the table rows
-    # --------------------------------------------------------------------------
+    # 4) Build table rows
     table_rows = []
     for row in rows:
+        formatted_conv = format_number(row["conv"])
+        formatted_fut = format_number(row["fut"])
+        formatted_savings = format_number(row["savings"])
+        # Format percentage with a "-" sign if savings > 0 (indicating a reduction)
+        savings_perc_val = float(row["savings_perc"])
+        if savings_perc_val > 0:
+            formatted_perc = f"-{abs(savings_perc_val):.0f}%"
+        elif savings_perc_val < 0:
+            formatted_perc = f"+{abs(savings_perc_val):.0f}%"
+        else:
+            formatted_perc = "0%"
         table_rows.append(html.Tr([
             html.Td(row["metric"]),
-            html.Td(get_currency_symbol(currency)),  # "per day" symbol
-            html.Td(format_currency_value(row["conv"], currency, conv_factor)),
-            html.Td(format_currency_value(row["fut"], currency, conv_factor)),
-            html.Td(
-                format_currency_value(row["savings"], currency, conv_factor),
-                className=style_savings(row["savings"])
-            ),
-            html.Td(
-                safe_format_percentage(row["savings_perc"]),
-                className=style_savings(row["savings_perc"])
-            )
+            html.Td(get_currency_symbol(currency)),
+            html.Td(formatted_conv),
+            html.Td(formatted_fut),
+            html.Td(formatted_savings, className=style_savings(row["savings"])),
+            html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
         ]))
 
-    # --------------------------------------------------------------------------
-    # 5) Build table header and return the table
-    # --------------------------------------------------------------------------
-    currency_symbol = get_currency_symbol(currency)
     header = html.Thead(html.Tr([
         html.Th("OPEX"),
         html.Th("per day"),
-        html.Th(f"Conventional ({currency_symbol}/day)"),
-        html.Th(f"After measures ({currency_symbol}/day)"),
-        html.Th(f"Savings ({currency_symbol}/day)"),
+        html.Th(f"Conventional ({get_currency_symbol(currency)}/day)"),
+        html.Th(f"After measures ({get_currency_symbol(currency)}/day)"),
+        html.Th(f"Savings ({get_currency_symbol(currency)}/day)"),
         html.Th("Savings (%)")
     ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
 
-    table = dbc.Table(
-        [header, html.Tbody(table_rows)],
-        bordered=True, striped=True, hover=True
-    )
+    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
-
+# ---------------------------------------------------------------------------
+# Emissions Comparison Table
+# ---------------------------------------------------------------------------
 def get_emissions_comparison_table(api_data):
-    # Get the current and future emissions data
     current = api_data.get("current_table", {})
     future = api_data.get("future_output_table", {})
     emissions_table = api_data.get("emissions_table", {})
-    
-    # Get the savings data (from the API, not calculated on the fly)
+
     savings_data = (emissions_table.get("Savings") or [{}])[0]
     savings_perc_data = (emissions_table.get("Savings_perc") or [{}])[0]
-    
-    # Extract each metric using the appropriate keys and defaults
+
     co2_ttw_conv = (current.get("co2_emission_ttw") or [{}])[0].get("avg_co2_ttw_day", 182084)
     co2_ttw_fut  = (future.get("co2_emission_ttw") or [{}])[0].get("future_avg_co2_ttw_day", 127459)
     co2_ttw_savings = savings_data.get("savings_avg_co2_ttw", 0)
@@ -1090,9 +1023,8 @@ def get_emissions_comparison_table(api_data):
     ch4_conv = (current.get("ch4_emission_ttw") or [{}])[0].get("avg_ch4_ttw_day", 3)
     ch4_fut  = (future.get("ch4_emission_ttw") or [{}])[0].get("future_avg_ch4_ttw_day", 3)
     ch4_savings = savings_data.get("savings_avg_ch4_ttw", 0)
-    ch4_savings_perc = savings_perc_data.get("savings_avg_ch4_ttw", 0)
-    
-    # Build the rows as a list of dictionaries
+    ch4_savings_perc = savings_perc_data.get("perc_savings_avg_ch4_ttw", 0)
+
     rows = [
         {"metric": "CO₂ Emissions TtW", "conv": co2_ttw_conv, "fut": co2_ttw_fut, "savings": co2_ttw_savings, "savings_perc": co2_ttw_savings_perc},
         {"metric": "CO₂ Emissions WtW", "conv": co2_wtw_conv, "fut": co2_wtw_fut, "savings": co2_wtw_savings, "savings_perc": co2_wtw_savings_perc},
@@ -1101,41 +1033,31 @@ def get_emissions_comparison_table(api_data):
         {"metric": "PM Emissions TtW", "conv": pm_conv, "fut": pm_fut, "savings": pm_savings, "savings_perc": pm_savings_perc},
         {"metric": "CH₄ Emissions TtW", "conv": ch4_conv, "fut": ch4_fut, "savings": ch4_savings, "savings_perc": ch4_savings_perc},
     ]
-    
-    # Build table rows inline (using formatting within the loop)
+
     table_rows = []
     for row in rows:
-        conv_val = float(row["conv"])
-        fut_val = float(row["fut"])
-        savings_val = float(row["savings"])
-        savings_perc_val = float(row["savings_perc"])
-        
-        # Format numbers with commas and no decimals
-        formatted_conv = f"{conv_val:,.0f}"
-        formatted_fut = f"{fut_val:,.0f}"
-        formatted_savings = f"{savings_val:,.0f}"
-        # Format percentage: if savings percentage is positive, display a negative sign (indicating reduction)
+        conv_val = float(row.get("conv") or 0)
+        fut_val = float(row.get("fut") or 0)
+        savings_val = float(row.get("savings") or 0)
+        savings_perc_val = float(row.get("savings_perc") or 0)
+        formatted_conv = format_number(conv_val)
+        formatted_fut = format_number(fut_val)
+        formatted_savings = format_number(savings_val)
         if savings_perc_val > 0:
             formatted_perc = f"-{abs(savings_perc_val):.0f}%"
         elif savings_perc_val < 0:
             formatted_perc = f"+{abs(savings_perc_val):.0f}%"
         else:
             formatted_perc = "0%"
-        
-        # Determine CSS class for savings (red for negative values, green for positive)
-        style_class = "text-danger" if savings_val < 0 else "text-success"
-        perc_style_class = "text-danger" if savings_perc_val > 0 else "text-success"
-        
-        table_rows.append(
-            html.Tr([
-                html.Td(row["metric"]),
-                html.Td("kg"),
-                html.Td(formatted_conv),
-                html.Td(formatted_fut),
-                html.Td(formatted_savings, className=style_class),
-                html.Td(formatted_perc, className=perc_style_class)
-            ])
-        )
+        table_rows.append(html.Tr([
+            html.Td(row["metric"]),
+            html.Td("kg"),
+            html.Td(formatted_conv),
+            html.Td(formatted_fut),
+            html.Td(formatted_savings, className=style_savings(row["savings"])),
+            html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
+        ]))
+
     
     header = html.Thead(html.Tr([
         html.Th("Emissions"),
@@ -1167,15 +1089,16 @@ def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     )
     return fig
 
-def fuel_consumption_figure(api_data=None):
+# ---------------------------------------------------------------------------
+# Figure Functions Updated with Currency Symbol in Labels
+# ---------------------------------------------------------------------------
+def fuel_consumption_figure(api_data=None, currency="USD"):
     """Create a visualization for fuel consumption costs from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
     
-    # Sort timeseries data by year
     current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
     future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
-    
     years = list(range(2025, 2051))
     current_fuel = {entry.get("year"): entry.get("total_fuel_current_inflated", 0) for entry in current_ts}
     future_fuel = {entry.get("year"): entry.get("total_fuel_future_inflated", 0) for entry in future_ts}
@@ -1197,12 +1120,12 @@ def fuel_consumption_figure(api_data=None):
         marker_color="orange"
     ))
     
-    set_figure_layout(fig, "Fuel Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    ylabel = f"Cost ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "Fuel Cost Comparison (2025-2050)", "Year", ylabel)
     return fig
 
 
-
-def spares_figure(api_data=None):
+def spares_figure(api_data=None, currency="USD"):
     """Create a visualization for spares/consumables costs from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1230,10 +1153,12 @@ def spares_figure(api_data=None):
         marker_color="orange"
     ))
     
-    set_figure_layout(fig, "Spares & Consumables Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    ylabel = f"Cost ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "Spares & Consumables Cost Comparison (2025-2050)", "Year", ylabel)
     return fig
 
-def penalty_cost_figure(api_data=None):
+
+def penalty_cost_figure(api_data=None, currency="USD"):
     """Create a visualization for penalty cost from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1261,10 +1186,12 @@ def penalty_cost_figure(api_data=None):
         marker_color="orange"
     ))
     
-    set_figure_layout(fig, "Penalty Cost Comparison (2025-2050)", "Year", "Penalty Cost (USD)")
+    ylabel = f"Penalty Cost ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "Penalty Cost Comparison (2025-2050)", "Year", ylabel)
     return fig
 
-def maintenance_cost_figure(api_data=None):
+
+def maintenance_cost_figure(api_data=None, currency="USD"):
     """Create a visualization for maintenance cost from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1292,10 +1219,12 @@ def maintenance_cost_figure(api_data=None):
         marker_color="red"
     ))
     
-    set_figure_layout(fig, "Maintenance Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    ylabel = f"Cost ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "Maintenance Cost Comparison (2025-2050)", "Year", ylabel)
     return fig
 
-def totex_figure(api_data=None):
+
+def totex_figure(api_data=None, currency="USD"):
     """Create a visualization for total expenditure (TOTEX) over time."""
     if not api_data or "result" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1320,10 +1249,12 @@ def totex_figure(api_data=None):
         line=dict(color="gray", width=2)
     ))
     
-    set_figure_layout(fig, "Yearly TOTEX", "Year", "Amount (USD)")
+    ylabel = f"Amount ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "Yearly TOTEX", "Year", ylabel)
     return fig
 
-def opex_cost_figure(api_data=None):
+
+def opex_cost_figure(api_data=None, currency="USD"):
     """Create a visualization for OPEX cost from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1355,10 +1286,12 @@ def opex_cost_figure(api_data=None):
         marker=dict(size=6)
     ))
     
-    set_figure_layout(fig, "OPEX Cost Comparison (2025-2050)", "Year", "Cost (USD)")
+    ylabel = f"Cost ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "OPEX Cost Comparison (2025-2050)", "Year", ylabel)
     return fig
 
-def cashflow_figure(api_data=None):
+
+def cashflow_figure(api_data=None, currency="USD"):
     """Create a visualization for yearly cash flow."""
     if not api_data or "result" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1391,10 +1324,12 @@ def cashflow_figure(api_data=None):
         line=dict(color="blue", width=2)
     ))
     
-    set_figure_layout(fig, "Yearly Cash Flow", "Year", "Cash Flow (USD)")
+    ylabel = f"Cash Flow ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "Yearly Cash Flow", "Year", ylabel)
     return fig
 
-def dwelling_at_berth_pie_figure(api_data):
+
+def dwelling_at_berth_pie_figure(api_data, currency="USD"):
     """Generate the current dwelling at berth pie chart."""
     if not api_data or "current_table" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1412,10 +1347,14 @@ def dwelling_at_berth_pie_figure(api_data):
         hole=0.4,
         textinfo="label+value"
     ))
-    fig.update_layout(title="Current Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
+    fig.update_layout(
+        title=f"Current Costs Breakdown ({get_currency_symbol(currency)})",
+        template="plotly_white"
+    )
     return fig
 
-def future_dwelling_at_berth_pie_figure(api_data):
+
+def future_dwelling_at_berth_pie_figure(api_data, currency="USD"):
     """Generate the future dwelling at berth pie chart."""
     if not api_data or "future_output_table" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1434,10 +1373,14 @@ def future_dwelling_at_berth_pie_figure(api_data):
         hole=0.4,
         textinfo="label+value"
     ))
-    fig.update_layout(title="Future Costs Breakdown", template=TEMPLATE_STYLE, margin=MARGIN_STYLE)
+    fig.update_layout(
+        title=f"Future Costs Breakdown ({get_currency_symbol(currency)})",
+        template="plotly_white"
+    )
     return fig
 
-def dashboard_layout(api_data, currency):
+
+def dashboard_layout(api_data, currency="USD"):
     """Create dashboard layout with multiple visualizations."""
     return dbc.Container([
         dbc.Card([
@@ -1446,81 +1389,66 @@ def dashboard_layout(api_data, currency):
                 style={"backgroundColor": "#0A4B8C"}
             ),
             dbc.CardBody([
-                # Top-level financial charts
                 dbc.Row([
                     dbc.Col(dcc.Graph(
-                        figure=totex_figure(api_data), 
-                        config={"displayModeBar": False}
-                    ), md=12)
-                ], className="mb-4"),
-                
-                # Cashflow and Penalty Cost Charts
-                dbc.Row([
-                    dbc.Col(dcc.Graph(
-                        figure=cashflow_figure(api_data), 
+                        figure=totex_figure(api_data, currency), 
                         config={"displayModeBar": False}
                     ), md=12)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(
-                        figure=penalty_cost_figure(api_data), 
+                        figure=cashflow_figure(api_data, currency), 
                         config={"displayModeBar": False}
                     ), md=12)
                 ], className="mb-4"),
-                                # Dwelling at Berth (Current vs Future) - Side by Side View
                 dbc.Row([
                     dbc.Col(dcc.Graph(
-                        figure=dwelling_at_berth_pie_figure(api_data),
+                        figure=penalty_cost_figure(api_data, currency), 
+                        config={"displayModeBar": False}
+                    ), md=12)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=dwelling_at_berth_pie_figure(api_data, currency),
                         config={"displayModeBar": False},
                         style={"width": "100%", "height": "600px"}
                     ), md=6),
                     dbc.Col(dcc.Graph(
-                        figure=future_dwelling_at_berth_pie_figure(api_data),
+                        figure=future_dwelling_at_berth_pie_figure(api_data, currency),
                         config={"displayModeBar": False},
                         style={"width": "100%", "height": "600px"}
                     ), md=6)
                 ], className="mb-4"),
-                # Maintenance & Spares Cost Side by Side
                 dbc.Row([
                     dbc.Col(dcc.Graph(
-                        figure=maintenance_cost_figure(api_data), 
+                        figure=maintenance_cost_figure(api_data, currency), 
                         config={"displayModeBar": False}
                     ), md=6),
                     dbc.Col(dcc.Graph(
-                        figure=spares_figure(api_data), 
+                        figure=spares_figure(api_data, currency), 
                         config={"displayModeBar": False}
                     ), md=6)
                 ], className="mb-4"),
-                # Fuel Consumption & OPEX Costs
                 dbc.Row([
                     dbc.Col(dcc.Graph(
-                        figure=fuel_consumption_figure(api_data), 
+                        figure=fuel_consumption_figure(api_data, currency), 
                         config={"displayModeBar": False}
                     ), md=6),
                     dbc.Col(dcc.Graph(
-                        figure=opex_cost_figure(api_data), 
+                        figure=opex_cost_figure(api_data, currency), 
                         config={"displayModeBar": False}
                     ), md=6)
-                ], className="mb-4"),
-
+                ], className="mb-4")
             ])
         ], className="mb-4")
     ], fluid=True)
 
+
 def layout():
     return dbc.Container([
-        html.H1("Key Output Metrics", className="mb-4", style={"color": "#0A4B8C", "textAlign": "center"}),
+        html.H1("Key Output Metrics", className="mb-4", 
+                style={"color": "#0A4B8C", "textAlign": "center"}),
         dbc.Row([
-            dbc.Col([
-                html.Label("Select Currency", className="font-weight-bold"),
-                dcc.Dropdown(
-                    id="currency-choice",
-                    options=[{"label": key, "value": key} for key in config.CURRENCIES.keys()],
-                    value=list(config.CURRENCIES.keys())[0],
-                    clearable=False,
-                    style={"marginBottom": "15px"}
-                )
-            ], md=6, xs=12),
             dbc.Col([
                 html.Label("Select Tables", className="font-weight-bold"),
                 dcc.Checklist(
@@ -1535,7 +1463,8 @@ def layout():
                     labelStyle={"display": "inline-block", "marginRight": "10px"},
                     inputStyle={"marginRight": "5px"}
                 )
-            ], md=6, xs=12)
+            ], md=12, xs=12)
         ], className="mb-4"),
-        html.Div(id="output-content", style={"padding": "20px", "backgroundColor": "#f8f9fa", "borderRadius": "8px"})
+        html.Div(id="output-content", 
+                 style={"padding": "20px", "backgroundColor": "#f8f9fa", "borderRadius": "8px"})
     ], fluid=True, className="py-4")

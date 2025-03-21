@@ -121,6 +121,7 @@ def get_content():
 ###############################################################################
 app.layout = html.Div([
     dcc.Store(id="vessel-data-store"),
+    dcc.Store(id='future-data-store'),
     dcc.Store(id="api-data-store", storage_type="session"),
     dcc.Store(id="financial-data-store", storage_type="session"),
     dcc.Store(id="tab-switch"),

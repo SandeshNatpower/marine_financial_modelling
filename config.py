@@ -101,7 +101,7 @@ def get_exchange_rate(from_currency, to_currency):
     url = f"https://api.exchangerate-api.com/v4/latest/{from_currency.upper()}"
     try:
         response = requests.get(url, timeout=5)
-        response.raise_for_status()  # Raise an error for bad responses
+        response.raise_for_status()
         data = response.json()
         if "rates" in data and to_currency.upper() in data["rates"]:
             rate = data["rates"][to_currency.upper()]
@@ -114,14 +114,11 @@ def get_exchange_rate(from_currency, to_currency):
         print(f"Error fetching exchange rate: {e}")
         return None
 
-# Default is EUR, so fetch conversion factors based on EUR dynamically.
-usd_conversion = get_exchange_rate("EUR", "USD") or 1.07  # Fallback to 1.07 if API fails
-gbp_conversion = get_exchange_rate("EUR", "GBP") or 0.85  # Fallback to 0.85 if API fails
 
 CURRENCIES = {
     "EUR": {"symbol": "€", "conversion": 1.0},
-    "USD": {"symbol": "$", "conversion": usd_conversion},
-    "GBP": {"symbol": "£", "conversion": gbp_conversion}
+    "USD": {"symbol": "$", "conversion": get_exchange_rate("EUR", "USD")},
+    "GBP": {"symbol": "£", "conversion": get_exchange_rate("EUR", "GBP")}
 }
 # General Options
 BOOLEAN_YES_NO_OPTIONS = ["Yes", "No"]

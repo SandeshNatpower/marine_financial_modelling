@@ -52,6 +52,10 @@ DEFAULT_SHORE_ENABLE = False
 DEFAULT_MAIN_ENGINE_SPEED = "MEDIUM"
 DEFAULT_AUX_ENGINE_SPEED = "MEDIUM"
 
+DEFAULT_CURRENCY = "EUR"
+CURRENCY_OPTIONS=[{"label": "EUR", "value": "EUR"},
+                  {"label": "USD", "value": "USD"},
+                  {"label": "GBP", "value": "GBP"}],
 # -------------------------------------------------------------------------------
 # HELPER FUNCTION: Create Input Group
 # -------------------------------------------------------------------------------
@@ -173,22 +177,16 @@ def get_vessel_image_path(vessel_type):
     # 3) Final fallback: default image
     return "default_vessel.png"
 
-
-
-import dash
-import dash_bootstrap_components as dbc
-from dash import html, dcc
-
-
 def layout():
     return dbc.Container(
-        [
+        [   
+           
             html.H1(
                 "Step 1: Vessel Details (version 1.3)",
                 className="mb-4",
                 style={"color": PRIMARY_COLOR, "textAlign": "center"}
             ),
-
+    
             # -----------------------------
             # Vessel Data Search Card
             # -----------------------------
@@ -240,7 +238,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-
+    
             # -----------------------------
             # Basic Vessel Information Card
             # -----------------------------
@@ -275,7 +273,7 @@ def layout():
                                     ],
                                     md=4, xs=12
                                 ),
-
+    
                                 # Vessel Details Column
                                 dbc.Col(
                                     [
@@ -368,7 +366,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-
+    
             # -----------------------------
             # Technical Specs & Engine Info Card
             # -----------------------------
@@ -481,7 +479,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-
+    
             # -----------------------------
             # Operational Profile Card
             # -----------------------------
@@ -532,7 +530,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-
+    
             # -----------------------------
             # Maintenance & Costs Card
             # -----------------------------
@@ -559,7 +557,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-
+    
             # -----------------------------
             # Future Inputs & Fuel Blend Card
             # -----------------------------
@@ -617,10 +615,27 @@ def layout():
                                 className="mb-3"
                             ),
                             dbc.Row(
-                                create_input_group("CAPEX", "capex", DEFAULT_CAPEX, "number",
-                                                   info_text="Capital expenditure", units="EUR", min_val=0),
+                                [
+                                    create_input_group("CAPEX", "capex", DEFAULT_CAPEX, "number",
+                                                       info_text="Capital expenditure", units="EUR", min_val=0, col_size=6)
+                                ],
                                 className="mb-3"
-                            )
+                            ),
+                            dbc.Row(
+                                create_input_group(
+                                    label="Currency",
+                                    id="currency-choice",
+                                    value=DEFAULT_CURRENCY,
+                                    input_type="dropdown",
+                                    options=[{"label": "EUR", "value": "EUR"},
+                                            {"label": "USD", "value": "USD"},
+                                            {"label": "GBP", "value": "GBP"}],
+                                    info_text="Select reporting currency",
+                                    col_size=4
+                                ),
+                                className="mb-3"
+                            ),
+                            
                         ],
                         style={"padding": "20px"}
                     ),
@@ -628,7 +643,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-
+    
             dbc.Button(
                 "Calculate Emissions & Costs",
                 id="calculate-button",
@@ -641,7 +656,7 @@ def layout():
                 className="mt-3",
                 style={"color": TEXT_COLOR, "textAlign": "center"}
             ),
-
+    
             # -----------------------------
             # Debug Section
             # -----------------------------
@@ -667,7 +682,7 @@ def layout():
                 className="mt-3 mb-5",
                 id="debug-section"
             ),
-
+    
             # -----------------------------
             # Footer
             # -----------------------------
