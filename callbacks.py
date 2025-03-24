@@ -1,3 +1,5 @@
+#callbacks.py
+
 import json
 import requests
 from urllib.parse import urlencode
@@ -241,6 +243,9 @@ def register_callbacks(app):
                     "Please enter a search term.")
         vessel_data = get_vessel_details(search_term, search_type)
         return vessel_data, f"Found vessel: {vessel_data.get('vessel_name', 'Unknown')}"
+
+
+
     
     # Update Vessel Fields Callback
     @app.callback(
@@ -324,12 +329,15 @@ def register_callbacks(app):
         Input('vessel-data-store', 'data'),
         prevent_initial_call=True
     )
+    
     def update_operational_and_maintenance_inputs(vessel_data):
         from pages.input_module import DEFAULT_VESSEL
         if not vessel_data:
             vessel_data = DEFAULT_VESSEL
         else:
             vessel_data = {**DEFAULT_VESSEL, **vessel_data}
+
+        print(vessel_data.get('sailing_days', 199))  # Should now print 295 instead of 199
         return (
             vessel_data.get('sailing_days', 199),
             vessel_data.get('working_days', 40),
@@ -342,6 +350,7 @@ def register_callbacks(app):
             vessel_data.get('SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR', 2),
             vessel_data.get('FUELEU_CURRENT_PENALTY_PER_YEAR', 729348.5444)
         )
+
     
     # Future Inputs Callback (using update_future_inputs_callback)
     @app.callback(

@@ -1,3 +1,5 @@
+
+#pages/input_module.py
 import dash
 from dash import html, dcc
 import dash_bootstrap_components as dbc
@@ -112,20 +114,27 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
 # VESSEL DETAILS FETCHER
 # -------------------------------------------------------------------------------
 def get_vessel_details(search_term, search_type='imo'):
-    url = "https://natpower-marine-api-dev.azurewebsites.net/marinedata/getvesseldetails_engine?"
+    url = "https://natpower-marine-api-dev.azurewebsites.net/marinedata/getvesseldetails_engine_places?"
     params = {"imo": search_term, "mmsi": search_term} if search_type == 'imo' else {"vesselname": search_term}
     
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        if isinstance(data, list) and data:
+        if isinstance(data, dict) and "vessel_summary" in data:
+            if data["vessel_summary"]:
+                # Extract the first vessel and return it.
+                return data["vessel_summary"][0]
+            else:
+                return DEFAULT_VESSEL    
+        elif isinstance(data, list) and data:
             return data[0]
         else:
             return DEFAULT_VESSEL
     except requests.RequestException as e:
         print(f"Exception fetching vessel details: {e}")
         return DEFAULT_VESSEL
+
 
 # -------------------------------------------------------------------------------
 # VESSEL IMAGE HANDLER
