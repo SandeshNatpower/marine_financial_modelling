@@ -148,7 +148,8 @@ def get_current_output_table(api_data, currency):
     spares_costs       = cost_data.get("spares_consumables_costs", 48)
     fueleu_penalty     = cost_data.get("fueleu_current_penalty", 1999)
     financing          = 0
-    euets              = 0
+    euets              = cost_data.get("avg_eu_ets", {})
+    
 
     maintenance_avg = cost_data.get("avg_engine_maintenance_costs_day", engine_maintenance)
     spares_avg      = cost_data.get("avg_spares_consumables_costs_day", spares_costs)
@@ -572,6 +573,10 @@ def get_future_output_table(api_data, currency):
     spares_idle    = costs_data.get("future_spares_consumables_costs", 72)
     spares_shore   = costs_data.get("shore_power_spares_per_day", 480)
     spares_avg     = costs_data.get("future_avg_spares_consumables_costs_day", 72)
+    
+    #EUETS data
+    
+    future_euets_data = costs_data.get("future_eu_ets", {})
 
     # OPEX Data
     opex_day_data = (future.get("opex_day") or [{}])[0]
@@ -794,11 +799,11 @@ def get_future_output_table(api_data, currency):
         html.Tr([
             html.Td("EU ETS"),
             html.Td(get_currency_symbol(currency)),
-            html.Td(format_number(0)),
-            html.Td(format_number(0)),
-            html.Td(format_number(0)),
-            html.Td(format_number(0)),
-            html.Td(format_number(0))
+            html.Td(format_number(future_euets_data)),
+            html.Td(format_number(future_euets_data)),
+            html.Td(format_number(future_euets_data)),
+            html.Td(format_number(future_euets_data)),
+            html.Td(format_number(future_euets_data))
         ]),
         # FuelEU row
         html.Tr([
@@ -856,7 +861,7 @@ def get_opex_comparison_table(api_data, currency):
     conv_financing = conventional.get("avg_financing_day", 0)
     conv_maintenance = conventional.get("avg_engine_maintenance_costs_day", 0)
     conv_spares = conventional.get("spares_consumables_costs", 0)
-    conv_eu_ets = conventional.get("avg_eu_ets_day", 0)
+    conv_eu_ets = conventional.get("avg_eu_ets", 0)
     conv_fuel_eu = conventional.get("avg_fueleu_day", 0)
 
     future = (api_data.get("future_output_table", {}).get("costs") or [{}])[0]
@@ -864,7 +869,7 @@ def get_opex_comparison_table(api_data, currency):
     fut_financing = future.get("future_avg_financing_day", 0)
     fut_maintenance = future.get("future_avg_engine_maintenance_costs_day", 0)
     fut_spares = future.get("future_avg_spares_consumables_costs_day", 0)
-    fut_eu_ets = future.get("future_avg_eu_ets_day", 0)
+    fut_eu_ets = future.get("future_eu_ets", 0)
     fut_fuel_eu = future.get("future_avg_fueleu_day", 0)
 
     # 2) Extract the Savings and Savings_perc from API

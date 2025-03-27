@@ -49,12 +49,13 @@ DEFAULT_SHORE_MAINT_COST = 480
 DEFAULT_SHORE_SPARES_COST = 480
 DEFAULT_BIOFUELS_SPARES_COST = 3
 DEFAULT_SHORE_ENABLE = False
+FUTURE_CO2_REDUCTION = 26
 
 # New defaults for engine speed
 DEFAULT_MAIN_ENGINE_SPEED = "MEDIUM"
 DEFAULT_AUX_ENGINE_SPEED = "MEDIUM"
 
-DEFAULT_SCENARIO_FUTURE_AUX_FUEL = ["MDO","LFO","HFO"]
+DEFAULT_SCENARIO_FUTURE_AUX_FUEL = ["Diesel-Bio-diesel"]
 
 DEFAULT_CURRENCY = "EUR"
 CURRENCY_OPTIONS=[{"label": "EUR", "value": "EUR"},
@@ -711,6 +712,21 @@ def layout():
                                         info_text="Net present value discount rate (0-100)", 
                                         units="%", 
                                         min_val=0
+                                    )
+                                ],
+                                className="mb-3"
+                            ),
+                            dbc.Row(
+                                [
+                                    create_input_group(
+                                        "Future CO2 Reduction Target",
+                                        "FUTURE-CO2-REDUCTION",
+                                        FUTURE_CO2_REDUCTION,
+                                        "number",
+                                        info_text="Future CO2 Reduction Target in percentage (0-100)",
+                                        units="%",
+                                        min_val=0,
+                                        max_val=100
                                     )
                                 ],
                                 className="mb-3"

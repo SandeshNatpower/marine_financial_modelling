@@ -158,7 +158,8 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "MAIN_ENGINE_TYPE": "4-STROKE",
         "AUX_ENGINE_SPEED": "MEDIUM",
         "AUX_ENGINE_TYPE": "4-STROKE",
-        "price_conversion": 1
+        "price_conversion": 1,
+        "FUTURE_CO2_REDUCTION": 26
     }
     vessel_data = merge_vessel_data(vessel_data_override)
     vessel_overrides = {
@@ -217,7 +218,8 @@ def update_future_inputs_callback(vessel_data, future_data):
         DEFAULT_INFLATION_RATE,
         DEFAULT_NPV_RATE,
         DEFAULT_CURRENCY,
-        DEFAULT_SCENARIO_FUTURE_AUX_FUEL
+        DEFAULT_SCENARIO_FUTURE_AUX_FUEL,
+        FUTURE_CO2_REDUCTION
     )
     vessel_data = merge_vessel_data(vessel_data)
     future_data = future_data or {}
@@ -233,7 +235,9 @@ def update_future_inputs_callback(vessel_data, future_data):
         float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))) / 100.0,
         float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))) / 100.0,
         future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY)),
-        future_data.get("scenario-future-aux-fuel", DEFAULT_SCENARIO_FUTURE_AUX_FUEL)
+        future_data.get("scenario-future-aux-fuel", DEFAULT_SCENARIO_FUTURE_AUX_FUEL),
+        future_data.get("FUTURE-CO2-REDUCTION", FUTURE_CO2_REDUCTION)
+        
     )
 
 ###############################################################################
@@ -368,6 +372,7 @@ def register_callbacks(app):
          Output('npv-rate', 'value'),
          Output('currency-choice', 'value')],
          Output('scenario-future-aux-fuel', 'value'),
+         Output('FUTURE-CO2-REDUCTION', 'value'),
         [Input('vessel-data-store', 'data'),
          Input('future-data-store', 'data')],
         prevent_initial_call=True
@@ -415,6 +420,7 @@ def register_callbacks(app):
             State('aux-engine-type', 'value'),
             State('vessel-data-store', 'data'),
             State('future-data-store', 'data'),
+            State('FUTURE-CO2-REDUCTION', 'value'),
             State('currency-choice', 'value')
         ],
         prevent_initial_call=True
@@ -431,7 +437,7 @@ def register_callbacks(app):
          shore_maint_cost, shore_spares_cost, shore_enable, npv_rate, capex,
          shore_port, reporting_year, inflation_rate,
          main_engine_speed, main_engine_type,
-         aux_engine_speed, aux_engine_type, vessel_data, future_data, currency_choice) = values
+         aux_engine_speed, aux_engine_type, vessel_data, future_data,FUTURE_CO2_REDUCTION, currency_choice) = values
         
         if not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
             return None, None, "input"
@@ -479,7 +485,9 @@ def register_callbacks(app):
             "MAIN_ENGINE_TYPE": main_engine_type,
             "AUX_ENGINE_SPEED": aux_engine_speed,
             "AUX_ENGINE_TYPE": aux_engine_type,
-            "price_conversion": price_conversion
+            "price_conversion": price_conversion,
+            "FUTURE_CO2_REDUCTION":float(FUTURE_CO2_REDUCTION) / 100
+            
         }
         if params["BIOFUELS_BLEND_PERCENTAGE"] > 1:
             raise ValueError("Biofuel blend percentage cannot exceed 100%")
