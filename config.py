@@ -4,8 +4,9 @@ import requests
 
 # API Endpoints
 API_BASE = os.getenv("API_BASE", "https://natpower-marine-api-dev.azurewebsites.net/marinedata")
-VESSEL_ENDPOINT = f"{API_BASE}/getvesseldetails_engine"
+VESSEL_ENDPOINT = f"{API_BASE}/getvesseldetails_engine_places"
 FINANCIAL_ENDPOINT = f"{API_BASE}/financialmodelling"
+DASHBOARD_ENDPOINT = f"{API_BASE}/financialmodellingscenarios"
 
 # Default Vessel Data with Extended Engine and Operational Parameters
 DEFAULT_VESSEL = {
@@ -42,8 +43,8 @@ DEFAULT_VESSEL = {
     "reporting_year": 2030,
     "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,  # EUR/hour
     "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,  # EUR/hour
-    "SHORE_POWER_MAINTENANCE_PER_DAY": 45.486,  # EUR/day
-    "SHORE_POWER_SPARES_PER_DAY": 45.486,  # EUR/day
+    "SHORE_POWER_MAINTENANCE_PER_DAY": 480,  # EUR/day
+    "SHORE_POWER_SPARES_PER_DAY": 480,  # EUR/day
     "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,  # EUR/hour
     "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,  # EUR/year
     "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,  # EUR/year

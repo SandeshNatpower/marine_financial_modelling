@@ -121,10 +121,13 @@ def get_content():
 ###############################################################################
 app.layout = html.Div([
     dcc.Store(id="vessel-data-store"),
-    dcc.Store(id='future-data-store'),
+    dcc.Store(id="future-data-store"),
     dcc.Store(id="api-data-store", storage_type="session"),
+    dcc.Store(id="dashboard-scenarios-store", storage_type="session"),  # Store for dashboard scenarios
     dcc.Store(id="financial-data-store", storage_type="session"),
     dcc.Store(id="tab-switch"),
+    # Replace the debug store with a Pre element for displaying debug text
+    html.Pre(id="debug-dashboard-data", style={"backgroundColor": "#f8f9fa", "padding": "10px", "maxHeight": "200px", "overflowY": "scroll"}),
     html.Link(rel="stylesheet", href="https://use.fontawesome.com/releases/v5.15.4/css/all.css"),
     get_sidebar(),
     get_content(),

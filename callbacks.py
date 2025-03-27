@@ -1,11 +1,10 @@
-#callbacks.py
-
 import json
 import requests
 from urllib.parse import urlencode
 
 import dash
-from dash import html, dcc, Input, Output, State
+from dash import html, dcc, Input, Output, State, no_update
+from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import config
 import plotly.graph_objects as go
@@ -14,7 +13,6 @@ import pages
 import pages.power_profiles
 import pages.input_module
 from pages.input_module import get_vessel_details, DEFAULT_VESSEL
-
 from pages.output_module import (
     get_current_output_table,
     get_future_output_table,
@@ -30,16 +28,15 @@ from pages.output_module import (
     fuel_consumption_figure,
 )
 
-# =============================================================================
+###############################################################################
 # GLOBAL STYLES & CONSTANTS
-# =============================================================================
+###############################################################################
 HEADER_STYLE = {"backgroundColor": "#0A4B8C", "padding": "10px"}
 HEADER_TEXT_STYLE = {"color": "white", "margin": "0"}
 MARGIN_STYLE = dict(l=60, r=30, t=60, b=50)
 TEMPLATE_STYLE = "plotly_white"
 
 def card_component(title, children):
-    """Return a styled Bootstrap card component."""
     return dbc.Card(
         [
             dbc.CardHeader(
@@ -51,44 +48,84 @@ def card_component(title, children):
         className="mb-4 shadow-sm rounded",
     )
 
-# =============================================================================
+###############################################################################
 # HELPER FUNCTIONS
-# =============================================================================
+###############################################################################
 def merge_vessel_data(vessel_data):
-    """
-    Merge provided vessel_data with DEFAULT_VESSEL.
-    """
     merged = DEFAULT_VESSEL.copy()
     if vessel_data:
         merged.update(vessel_data)
     return merged
 
-def build_api_url(params):
-    """
-    Build and print the API URL given a dictionary of parameters.
-    """
+def build_api_url(params, endpoint):
     qs = urlencode(params, doseq=True)
-    url = f"{config.FINANCIAL_ENDPOINT}?{qs}"
+    url = f"{endpoint}?{qs}"
     print(f"Final API URL: {url}")
     return url
 
-# =============================================================================
-# API CALL FUNCTION (Keep this name as requested)
-# =============================================================================
+# -------------------------------------------------------------------------------
+# Dashboard Scenarios: include the new parameter scenario_future_aux_fuel.
+# -------------------------------------------------------------------------------
+def fetch_dashboard_scenarios(vessel_data, future_data):
+    vessel_data = merge_vessel_data(vessel_data)
+    future_data = future_data or {}
+    params = {
+        "vessel_id": vessel_data.get("imo", 11111),
+        "main_engine_power_kw": float(vessel_data.get("total_engine_power", 38400)),
+        "aux_engine_power_kw": float(vessel_data.get("average_hoteling_kw", 2020)),
+        "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 0.5)),
+        "working_engine_load": float(vessel_data.get("working_engine_load", 0.3)),
+        "shore_engine_load": float(vessel_data.get("shore_engine_load", 0.395)),
+        "sailing_days": float(vessel_data.get("sailing_days", 0.1)),
+        "working_days": float(vessel_data.get("working_days", 0.1)),
+        "idle_days": int(vessel_data.get("idle_days", 126)),
+        "shore_days": int(vessel_data.get("shore_days", 0)),
+        "shore_port": int(vessel_data.get("shore_port", 2)),
+        "main_fuel_type": vessel_data.get("main_fuel_type", "MDO"),
+        "aux_fuel_type": vessel_data.get("aux_fuel_type", "MDO"),
+        "future_main_fuel_type": future_data.get("future-main-fuel-type", "Diesel-Bio-diesel"),
+        "future_aux_fuel_type": future_data.get("future-aux-fuel-type", "MDO"),
+        "reporting_year": int(vessel_data.get("reporting_year", 2030)),
+        "ENGINE_MAINTENANCE_COSTS_PER_HOUR": float(vessel_data.get("ENGINE_MAINTENANCE_COSTS_PER_HOUR", 480)),
+        "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(vessel_data.get("SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR", 2)),
+        "SHORE_POWER_MAINTENANCE_PER_DAY": float(vessel_data.get("SHORE_POWER_MAINTENANCE_PER_DAY", 480)),
+        "SHORE_POWER_SPARES_PER_DAY": float(vessel_data.get("SHORE_POWER_SPARES_PER_DAY", 480)),
+        "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(future_data.get("biofuels-spares-cost", 3)),
+        "FUELEU_CURRENT_PENALTY_PER_YEAR": float(vessel_data.get("FUELEU_CURRENT_PENALTY_PER_YEAR", 729348.5444)),
+        "FUELEU_FUTURE_PENALTY_PER_YEAR": float(future_data.get("fueleu-future-penalty", 0)),
+        "PARASITIC_LOAD_ENGINE": float(future_data.get("parasitic-load", 0.95)),
+        "BIOFUELS_BLEND_PERCENTAGE": float(future_data.get("biofuels-blend", 0.3)),
+        "shore_enable": str(vessel_data.get("shore_enable", False)).lower(),
+        "inflation_rate": float(future_data.get("inflation-rate", 0.02)),
+        "npv_rate": float(future_data.get("npv-rate", 0)),
+        "CAPEX": float(vessel_data.get("CAPEX", 19772750)),
+        "MAIN_ENGINE_SPEED": vessel_data.get("MAIN_ENGINE_SPEED", "MEDIUM"),
+        "MAIN_ENGINE_TYPE": vessel_data.get("MAIN_ENGINE_TYPE", "4-STROKE"),
+        "AUX_ENGINE_SPEED": vessel_data.get("AUX_ENGINE_SPEED", "MEDIUM"),
+        "AUX_ENGINE_TYPE": vessel_data.get("AUX_ENGINE_TYPE", "4-STROKE"),
+        "price_conversion": float(vessel_data.get("price_conversion", 1)),
+        # NEW parameter for future aux fuel scenarios:
+        "scenario_future_aux_fuel": future_data.get("scenario-future-aux-fuel", "MDO,LFO,HFO")
+    }
+    qs = urlencode(params, doseq=True)
+    url = f"{config.DASHBOARD_ENDPOINT}?{qs}"
+    print(f"Dashboard API URL: {url}")
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        dashboard_json = response.json()
+        #print("Dashboard API returned:", json.dumps(dashboard_json, indent=2))
+        return dashboard_json
+    except Exception as e:
+        print(f"Dashboard API Error: {str(e)}")
+        return {}
+
+# -------------------------------------------------------------------------------
+# Financial Data: Using your first API.
+# -------------------------------------------------------------------------------
 def get_financial_data(input_params=None, vessel_data_override=None):
-    """
-    Retrieve financial data from the external API.
-    
-    Parameters:
-        input_params (dict): Additional input parameters (can include future inputs).
-        vessel_data_override (dict): Vessel details to override defaults.
-    
-    Returns:
-        dict: JSON response from the API or an empty dict if an error occurs.
-    """
-    # Fallback defaults
     fallback_defaults = {
-        "vessel_id": 11111,
+        "vessel_id": 9803613,
         "main_engine_power_kw": 38400,
         "aux_engine_power_kw": 2020,
         "sailing_engine_load": 0.5,
@@ -101,14 +138,12 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "shore_port": 1,
         "main_fuel_type": "MDO",
         "aux_fuel_type": "MDO",
-        # Future parameters:
         "future_main_fuel_type": "Diesel-Bio-diesel",
         "future_aux_fuel_type": "Diesel-Bio-diesel",
         "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,
         "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
         "PARASITIC_LOAD_ENGINE": 0.95,
-        "BIOFUELS_BLEND_PERCENTAGE": 0.3,  # already in decimal (0.3 == 30%)
-        # End future parameters
+        "BIOFUELS_BLEND_PERCENTAGE": 0.3,
         "reporting_year": 2030,
         "ENGINE_MAINTENANCE_COSTS_PER_HOUR": 20,
         "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
@@ -123,11 +158,9 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "MAIN_ENGINE_TYPE": "4-STROKE",
         "AUX_ENGINE_SPEED": "MEDIUM",
         "AUX_ENGINE_TYPE": "4-STROKE",
-        "price_conversion": 1  # will be overridden based on currency choice
+        "price_conversion": 1
     }
-    
     vessel_data = merge_vessel_data(vessel_data_override)
-    # Override fallback defaults with vessel data (if available)
     vessel_overrides = {
         "vessel_id": vessel_data.get("imo", fallback_defaults["vessel_id"]),
         "main_engine_power_kw": vessel_data.get("total_engine_power", fallback_defaults["main_engine_power_kw"]),
@@ -136,7 +169,6 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "aux_fuel_type": vessel_data.get("aux_fuel_type", fallback_defaults["aux_fuel_type"]),
         "reporting_year": vessel_data.get("reporting_year", fallback_defaults["reporting_year"]),
     }
-    
     final_params = fallback_defaults.copy()
     final_params.update(vessel_overrides)
     if input_params:
@@ -160,35 +192,18 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         if final_params.get(key, 0) < 0:
             raise ValueError(f"{key} cannot be negative")
     
-    url = build_api_url(final_params)
+    qs = urlencode(final_params, doseq=True)
+    url = f"{config.FINANCIAL_ENDPOINT}?{qs}"
+    print(f"Financial API URL: {url}")
     try:
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"API Error: {str(e)}")
+        print(f"Financial API Error: {str(e)}")
         return {}
 
-# =============================================================================
-# FUTURE INPUTS UPDATE FUNCTION (Keep this name as requested)
-# =============================================================================
 def update_future_inputs_callback(vessel_data, future_data):
-    """
-    Update and return the future input values as a tuple for the future-data-store.
-    
-    Returns a tuple of:
-        future_main_fuel_type,
-        future_aux_fuel_type,
-        biofuels_spares_cost,
-        fueleu_future_penalty,
-        parasitic_load,
-        biofuels_blend,
-        shore_maint_cost,
-        shore_spares_cost,
-        inflation_rate,
-        npv_rate,
-        currency_choice
-    """
     from pages.input_module import (
         DEFAULT_VESSEL,
         DEFAULT_FUTURE_MAIN_FUEL_TYPE,
@@ -201,33 +216,32 @@ def update_future_inputs_callback(vessel_data, future_data):
         DEFAULT_SHORE_SPARES_COST,
         DEFAULT_INFLATION_RATE,
         DEFAULT_NPV_RATE,
-        DEFAULT_CURRENCY
+        DEFAULT_CURRENCY,
+        DEFAULT_SCENARIO_FUTURE_AUX_FUEL
     )
-    
     vessel_data = merge_vessel_data(vessel_data)
     future_data = future_data or {}
-    
     return (
         future_data.get("future-main-fuel-type", vessel_data.get("future-main-fuel-type", DEFAULT_FUTURE_MAIN_FUEL_TYPE)),
         future_data.get("future-aux-fuel-type", vessel_data.get("future-aux-fuel-type", DEFAULT_FUTURE_AUX_FUEL_TYPE)),
         float(future_data.get("biofuels-spares-cost", vessel_data.get("biofuels-spares-cost", DEFAULT_BIOFUELS_SPARES_COST))),
         float(future_data.get("fueleu-future-penalty", vessel_data.get("fueleu-future-penalty", DEFAULT_FUELEU_FUTURE_PENALTY))),
         float(future_data.get("parasitic-load", vessel_data.get("parasitic-load", DEFAULT_PARASITIC_LOAD))),
-        float(future_data.get("biofuels-blend", vessel_data.get("biofuels-blend", DEFAULT_BIOFUELS_BLEND))) / 100.0,
+        float(future_data.get("biofuels-blend", vessel_data.get("biofuels-blend", DEFAULT_BIOFUELS_BLEND))),
         float(future_data.get("shore-maint-cost", vessel_data.get("shore-maint-cost", DEFAULT_SHORE_MAINT_COST))),
         float(future_data.get("shore-spares-cost", vessel_data.get("shore-spares-cost", DEFAULT_SHORE_SPARES_COST))),
         float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))) / 100.0,
         float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))) / 100.0,
-        future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY))
+        future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY)),
+        future_data.get("scenario-future-aux-fuel", DEFAULT_SCENARIO_FUTURE_AUX_FUEL)
     )
 
-# =============================================================================
+###############################################################################
 # REGISTER CALLBACKS
-# =============================================================================
+###############################################################################
 def register_callbacks(app):
     """Register all Dash callbacks."""
     
-    # Vessel Search Callback
     @app.callback(
         [Output('vessel-data-store', 'data'),
          Output('search-results', 'children')],
@@ -243,11 +257,7 @@ def register_callbacks(app):
                     "Please enter a search term.")
         vessel_data = get_vessel_details(search_term, search_type)
         return vessel_data, f"Found vessel: {vessel_data.get('vessel_name', 'Unknown')}"
-
-
-
     
-    # Update Vessel Fields Callback
     @app.callback(
         [Output('vessel-name', 'value'),
          Output('imo-number', 'value'),
@@ -269,7 +279,6 @@ def register_callbacks(app):
             vessel_data.get('dwt', config.DEFAULT_VESSEL["dwt"])
         )
     
-    # Update Technical Specs Callback
     @app.callback(
         [Output('main-power', 'value'),
          Output('aux-power', 'value'),
@@ -293,7 +302,6 @@ def register_callbacks(app):
             vessel_data.get("aux_fuel_type", "MDO")
         )
     
-    # Update Vessel Image Callback
     @app.callback(
         [Output('vessel-image', 'src'),
          Output('vessel-type-display', 'children')],
@@ -314,7 +322,6 @@ def register_callbacks(app):
         ])
         return image_path, vessel_type_display
     
-    # Update Operational & Maintenance Inputs Callback
     @app.callback(
         [Output('sailing-days', 'value'),
          Output('working-days', 'value'),
@@ -329,15 +336,12 @@ def register_callbacks(app):
         Input('vessel-data-store', 'data'),
         prevent_initial_call=True
     )
-    
     def update_operational_and_maintenance_inputs(vessel_data):
         from pages.input_module import DEFAULT_VESSEL
         if not vessel_data:
             vessel_data = DEFAULT_VESSEL
         else:
             vessel_data = {**DEFAULT_VESSEL, **vessel_data}
-
-        print(vessel_data.get('sailing_days', 199))  # Should now print 295 instead of 199
         return (
             vessel_data.get('sailing_days', 199),
             vessel_data.get('working_days', 40),
@@ -345,28 +349,25 @@ def register_callbacks(app):
             vessel_data.get('shore_days', 0),
             vessel_data.get('sailing_engine_load', 0.5),
             vessel_data.get('working_engine_load', 0.3),
-            vessel_data.get('shore_engine_load', 0.4),
+            vessel_data.get('shore_engine_load', 0.395),
             vessel_data.get('ENGINE_MAINTENANCE_COSTS_PER_HOUR', 20),
             vessel_data.get('SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR', 2),
             vessel_data.get('FUELEU_CURRENT_PENALTY_PER_YEAR', 729348.5444)
         )
-
     
-    # Future Inputs Callback (using update_future_inputs_callback)
     @app.callback(
-        [
-            Output('future-main-fuel-type', 'value'),
-            Output('future-aux-fuel-type', 'value'),
-            Output('biofuels-spares-cost', 'value'),
-            Output('fueleu-future-penalty', 'value'),
-            Output('parasitic-load', 'value'),
-            Output('biofuels-blend', 'value'),
-            Output('shore-maint-cost', 'value'),
-            Output('shore-spares-cost', 'value'),
-            Output('inflation-rate', 'value'),
-            Output('npv-rate', 'value'),
-            Output('currency-choice', 'value'),
-        ],
+        [Output('future-main-fuel-type', 'value'),
+         Output('future-aux-fuel-type', 'value'),
+         Output('biofuels-spares-cost', 'value'),
+         Output('fueleu-future-penalty', 'value'),
+         Output('parasitic-load', 'value'),
+         Output('biofuels-blend', 'value'),
+         Output('shore-maint-cost', 'value'),
+         Output('shore-spares-cost', 'value'),
+         Output('inflation-rate', 'value'),
+         Output('npv-rate', 'value'),
+         Output('currency-choice', 'value')],
+         Output('scenario-future-aux-fuel', 'value'),
         [Input('vessel-data-store', 'data'),
          Input('future-data-store', 'data')],
         prevent_initial_call=True
@@ -374,9 +375,9 @@ def register_callbacks(app):
     def update_future_inputs(vessel_data, future_data):
         return update_future_inputs_callback(vessel_data, future_data)
     
-    # Calculate Financial Data Callback (merging parameter extraction and API call)
     @app.callback(
         [Output('api-data-store', 'data'),
+         Output('dashboard-scenarios-store', 'data'),
          Output('tab-switch', 'data')],
         Input('calculate-button', 'n_clicks'),
         [
@@ -420,9 +421,7 @@ def register_callbacks(app):
     )
     def update_financial_data(n_clicks, *values):
         if n_clicks is None:
-            return None, "input"
-        
-        # Unpack values (order must match the State order above)
+            return None, None, "input"
         (main_power, aux_power, main_fuel_type, aux_fuel_type, 
          sailing_days, working_days, idle_days, shore_days,
          sailing_engine_load, working_engine_load, shore_engine_load,
@@ -435,14 +434,19 @@ def register_callbacks(app):
          aux_engine_speed, aux_engine_type, vessel_data, future_data, currency_choice) = values
         
         if not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
-            return None, "input"
+            return None, None, "input"
         
         shore_enable_bool = str(shore_enable).strip().lower() in ["yes", "true"]
         price_conversion = config.CURRENCIES.get(currency_choice, {}).get("conversion", 1)
         
-        # Build parameter dictionary for API call
+        try:
+            blend_value = float(biofuels_blend)
+        except ValueError:
+            raise ValueError("Invalid biofuels blend percentage provided.")
+        if blend_value > 1:
+            blend_value /= 100.0
         params = {
-            "vessel_id": vessel_data.get("imo", 11111),
+            "vessel_id": vessel_data.get("imo", 9803613),
             "main_engine_power_kw": float(main_power),
             "aux_engine_power_kw": float(aux_power),
             "main_fuel_type": main_fuel_type,
@@ -466,9 +470,9 @@ def register_callbacks(app):
             "FUELEU_CURRENT_PENALTY_PER_YEAR": float(fueleu_penalty),
             "FUELEU_FUTURE_PENALTY_PER_YEAR": float(fueleu_future_penalty),
             "PARASITIC_LOAD_ENGINE": float(parasitic_load),
-            "BIOFUELS_BLEND_PERCENTAGE": float(biofuels_blend) / 100.0,
+            "BIOFUELS_BLEND_PERCENTAGE": blend_value,
             "shore_enable": shore_enable_bool,
-            "inflation_rate": float(inflation_rate) / 100.0 if inflation_rate else 0.02,
+            "inflation_rate": float(inflation_rate) if inflation_rate else 0.02,
             "npv_rate": float(npv_rate) / 100.0,
             "CAPEX": float(capex),
             "MAIN_ENGINE_SPEED": main_engine_speed,
@@ -477,35 +481,88 @@ def register_callbacks(app):
             "AUX_ENGINE_TYPE": aux_engine_type,
             "price_conversion": price_conversion
         }
-        
         if params["BIOFUELS_BLEND_PERCENTAGE"] > 1:
             raise ValueError("Biofuel blend percentage cannot exceed 100%")
         for key in ["sailing_days", "working_days", "idle_days"]:
             if params[key] < 0:
                 raise ValueError(f"{key} cannot be negative")
-        
         qs = urlencode(params, doseq=True)
         url = f"{config.FINANCIAL_ENDPOINT}?{qs}"
-        print(f"Final API URL: {url}")
-        
+        print(f"Final Financial API URL: {url}")
         try:
             response = requests.get(url, timeout=15)
             response.raise_for_status()
-            return response.json(), "output"
+            financial_data = response.json()
+            print("Financial API Call Successful")
         except Exception as e:
-            print(f"API Error: {str(e)}")
-            return None, "input"
+            print(f"Financial API Error: {str(e)}")
+            financial_data = None
+        
+        # Fetch dashboard scenarios using the separate endpoint.
+        dashboard_data = fetch_dashboard_scenarios(vessel_data or config.DEFAULT_VESSEL, future_data or {})
+        #print(json.dumps(dashboard_data, indent=2) if dashboard_data else "No dashboard data")
+        return financial_data, dashboard_data, "output"
     
-    # Additional Callbacks for Charts and Dashboard Layout
+    
+    
+    @app.callback(
+        [Output("cashflow-graph", "figure"),
+         Output("totex-vertical-graph", "figure"),
+         Output("totex-horizontal-graph", "figure"),
+         Output("dwelling-pie-chart", "figure"),
+         Output("scenario-filter", "options"),
+         Output("scenario-filter", "value")],
+        Input("dashboard-scenarios-store", "data")
+    )
+    def update_financial_metrics(dashboard_data):
+        """Update all financial metrics graphs and scenario filter"""
+        if not dashboard_data:
+            raise PreventUpdate
+            
+        # Generate figures with actual API data
+        cashflow = cashflow_figure(dashboard_data)
+        totex_vert = totex_figure(dashboard_data)
+        totex_horiz = pages.power_profiles.totex_horizontal_figure(dashboard_data)
+        dwelling = pages.power_profiles.dwelling_at_berth_pie_figure()  # Update if you have data-driven version
+
+        # Generate scenario options from actual data
+        _, scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data)
+        scenario_options = [{"label": k, "value": k} for k in scenarios.keys()]
+        default_scenarios = list(scenarios.keys())[:3]  # First 3 as default
+
+        return (cashflow, totex_vert, totex_horiz, dwelling, 
+                scenario_options, default_scenarios)
+
     @app.callback(
         Output("metric-comparison-chart", "figure"),
         [Input("metric-dropdown", "value"),
          Input("year-range-slider", "value"),
-         Input("scenario-filter", "value")]
+         Input("scenario-filter", "value"),
+         Input("dashboard-scenarios-store", "data")]
     )
-    def update_metric_comparison_chart(selected_metric, year_range, selected_scenarios):
-        return pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios)
+    def update_metric_comparison(metric, year_range, scenarios, dashboard_data):
+        """Update metric comparison chart with live data"""
+        if not all([metric, year_range, scenarios, dashboard_data]):
+            raise PreventUpdate
+            
+        return pages.power_profiles.generate_metric_figure(
+            metric, year_range, scenarios, dashboard_data
+        )
+
+    # Graph callbacks using the dashboard data.
     
+    @app.callback(
+        Output("debug-dashboard-data", "children"),
+        Input("dashboard-scenarios-store", "data")
+    )
+    def debug_dashboard_data(dashboard_data):
+        if dashboard_data is None:
+            return "No dashboard data available."
+        try:
+            return json.dumps(dashboard_data, indent=2)
+        except Exception as e:
+            return f"Error formatting dashboard data: {e}"
+        
     @app.callback(
         Output("detail-power-profile-chart", "figure"),
         [Input("detail-peak-power", "value"),
@@ -527,46 +584,45 @@ def register_callbacks(app):
     )
     def update_energy_demand_chart(peak_power, base_load_percent):
         if peak_power is None or base_load_percent is None:
-            return go.Figure(layout={"title": "No Data Available", "xaxis_title": "Year", "yaxis_title": "Energy Demand (MWh)"})
-        years_data, demand_data = pages.power_profiles.generate_load_profile(peak_power=peak_power, base_load_percent=base_load_percent)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=years_data, y=demand_data, mode="lines+markers", name="Projected Demand"))
-        pages.power_profiles.set_figure_layout(fig, "Projected Energy Demand Over Time", "Hour of the Day", "Energy Demand (kW)")
+            return go.Figure(layout={"title": "No Data Available", "xaxis_title": "Hour", "yaxis_title": "Energy Demand (kW)"})
+        fig = pages.power_profiles.projected_energy_demand_figure()
         return fig
     
     @app.callback(
         Output("dashboard-charts-container", "children"),
-        Input("dashboard-chart-selector", "value")
+        [Input("dashboard-chart-selector", "value"),
+         Input("dashboard-scenarios-store", "data")]
     )
-    def update_dashboard_charts(selected_charts):
+    def update_dashboard_charts(selected_charts, dashboard_data):
         charts = []
+        if not dashboard_data:
+            dashboard_data = {}
+        # Transform dashboard data using our load_totex_scenarios function.
+        years_data, processed_scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data) if dashboard_data else ([], {})
         if "dwelling" in selected_charts:
             charts.append(
                 card_component("Dwelling at Berth - Biofuel Blend Minimum",
                                dcc.Graph(figure=pages.power_profiles.dwelling_at_berth_pie_figure(), className="chart-container"))
             )
         if "npv" in selected_charts:
-            years_data, scenarios = pages.power_profiles.load_totex_scenarios()
             fig = go.Figure()
-            for label, sc in scenarios.items():
+            for label, sc in processed_scenarios.items():
                 if "NPV" in sc and len(sc["NPV"]) == len(years_data):
                     fig.add_trace(go.Scatter(x=years_data, y=sc["NPV"], mode="lines", name=label))
             pages.power_profiles.set_figure_layout(fig, "NPV Comparison", "Year", "NPV (£)")
             fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
             charts.append(card_component("NPV Comparison", dcc.Graph(figure=fig, className="chart-container")))
         if "result" in selected_charts:
-            years_data, scenarios = pages.power_profiles.load_totex_scenarios()
             fig = go.Figure()
-            for label, sc in scenarios.items():
+            for label, sc in processed_scenarios.items():
                 if "Result" in sc and len(sc["Result"]) == len(years_data):
                     fig.add_trace(go.Scatter(x=years_data, y=sc["Result"], mode="lines", name=label))
             pages.power_profiles.set_figure_layout(fig, "Result Comparison", "Year", "Result (£)")
             fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
             charts.append(card_component("Result Comparison", dcc.Graph(figure=fig, className="chart-container")))
         if "cumulative" in selected_charts:
-            years_data, scenarios = pages.power_profiles.load_totex_scenarios()
             fig = go.Figure()
-            for label, sc in scenarios.items():
+            for label, sc in processed_scenarios.items():
                 if "Cumulative" in sc and len(sc["Cumulative"]) == len(years_data):
                     fig.add_trace(go.Scatter(x=years_data, y=sc["Cumulative"], mode="lines", name=label))
             pages.power_profiles.set_figure_layout(fig, "Cumulative Comparison", "Year", "Cumulative (£)")
@@ -575,22 +631,20 @@ def register_callbacks(app):
         if "cashflow" in selected_charts:
             charts.append(
                 card_component("Cashflow Analysis", 
-                               dcc.Graph(figure=pages.power_profiles.cashflow_figure(), className="chart-container"))
+                               dcc.Graph(figure=pages.power_profiles.cashflow_figure(dashboard_data), className="chart-container"))
             )
         if "totex" in selected_charts:
             charts.append(
                 card_component("TOTEX Comparison", 
-                               dcc.Graph(figure=pages.power_profiles.totex_figure(), className="chart-container"))
+                               dcc.Graph(figure=pages.power_profiles.totex_figure(dashboard_data), className="chart-container"))
             )
         return charts
     
     @app.callback(
         Output("output-content", "children"),
-        [
-            Input("api-data-store", "data"),
-            Input("future-data-store", "data"),
-            Input("table-selection-dropdown", "value")
-        ]
+        [Input("api-data-store", "data"),
+         Input("future-data-store", "data"),
+         Input("table-selection-dropdown", "value")]
     )
     def display_emissions_output(api_data, future_data, selected_tables):
         if not api_data:
@@ -606,7 +660,6 @@ def register_callbacks(app):
         
         currency = (future_data or {}).get("currency-choice", "EUR")
         sections = []
-        
         if 'current' in selected_tables:
             sections.append(
                 dbc.Card(
@@ -647,7 +700,6 @@ def register_callbacks(app):
                     className="mb-4"
                 )
             )
-        
         dash_layout_content = dashboard_layout(api_data, currency)
         sections.append(
             dbc.Card(
@@ -659,3 +711,4 @@ def register_callbacks(app):
             )
         )
         return html.Div(sections)
+

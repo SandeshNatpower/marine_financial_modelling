@@ -38,21 +38,23 @@ DEFAULT_SAILING_ENGINE_LOAD = 50    # instead of 0.5 (i.e. 50%)
 DEFAULT_WORKING_ENGINE_LOAD = 30    # instead of 0.3 (i.e. 30%)
 DEFAULT_SHORE_ENGINE_LOAD = 39.5    # instead of 0.395 (i.e. 39.5%)
 
-DEFAULT_SHORE_PORT = 1
+DEFAULT_SHORE_PORT = 2
 DEFAULT_MAIN_FUEL_TYPE = "MDO"
 DEFAULT_AUX_FUEL_TYPE = "MDO"
 DEFAULT_FUTURE_MAIN_FUEL_TYPE = "Diesel-Bio-diesel"
 DEFAULT_FUTURE_AUX_FUEL_TYPE = "Diesel-Bio-diesel"
 DEFAULT_ENGINE_MAINT_COST = 20
 DEFAULT_SPARES_COST = 2
-DEFAULT_SHORE_MAINT_COST = 45.486
-DEFAULT_SHORE_SPARES_COST = 45.486
+DEFAULT_SHORE_MAINT_COST = 480
+DEFAULT_SHORE_SPARES_COST = 480
 DEFAULT_BIOFUELS_SPARES_COST = 3
 DEFAULT_SHORE_ENABLE = False
 
 # New defaults for engine speed
 DEFAULT_MAIN_ENGINE_SPEED = "MEDIUM"
 DEFAULT_AUX_ENGINE_SPEED = "MEDIUM"
+
+DEFAULT_SCENARIO_FUTURE_AUX_FUEL = ["MDO","LFO","HFO"]
 
 DEFAULT_CURRENCY = "EUR"
 CURRENCY_OPTIONS=[{"label": "EUR", "value": "EUR"},
@@ -525,11 +527,11 @@ def layout():
                             dbc.Row(
                                 [
                                     create_input_group("Sailing Engine Load", "sailing-engine-load", DEFAULT_SAILING_ENGINE_LOAD,
-                                                       "number", info_text="Engine load during sailing (0-100%)", min_val=0, max_val=100, units="%"),
+                                                       "number", info_text="Engine load during sailing (0-1)", min_val=0, max_val=1, units=""),
                                     create_input_group("Working Engine Load", "working-engine-load", DEFAULT_WORKING_ENGINE_LOAD,
-                                                       "number", info_text="Engine load during working (0-100%)", min_val=0, max_val=100, units="%"),
+                                                       "number", info_text="Engine load during working (0-1)", min_val=0, max_val=1, units=""),
                                     create_input_group("Shore Engine Load", "shore-engine-load", DEFAULT_SHORE_ENGINE_LOAD,
-                                                       "number", info_text="Engine load at shore (0-100%)", min_val=0, max_val=100, units="%")
+                                                       "number", info_text="Engine load at shore (0-1)", min_val=0, max_val=1, units="")
                                 ]
                             )
                         ],
@@ -580,53 +582,151 @@ def layout():
                         [
                             dbc.Row(
                                 [
-                                    create_input_group("Future Main Fuel Type", "future-main-fuel-type", DEFAULT_FUTURE_MAIN_FUEL_TYPE,
-                                                       "dropdown", options=FUEL_OPTIONS, col_size=6, info_text="Future main fuel type"),
-                                    create_input_group("Future Aux Fuel Type", "future-aux-fuel-type", DEFAULT_FUTURE_AUX_FUEL_TYPE,
-                                                       "dropdown", options=FUEL_OPTIONS, col_size=6, info_text="Future auxiliary fuel type")
+                                    create_input_group(
+                                        "Future Main Fuel Type", 
+                                        "future-main-fuel-type", 
+                                        DEFAULT_FUTURE_MAIN_FUEL_TYPE,
+                                        "dropdown", 
+                                        options=FUEL_OPTIONS, 
+                                        col_size=6, 
+                                        info_text="Future main fuel type"
+                                    ),
+                                    create_input_group(
+                                        "Future Aux Fuel Type", 
+                                        "future-aux-fuel-type", 
+                                        DEFAULT_FUTURE_AUX_FUEL_TYPE,
+                                        "dropdown", 
+                                        options=FUEL_OPTIONS, 
+                                        col_size=6, 
+                                        info_text="Future auxiliary fuel type"
+                                    )
                                 ],
                                 className="mb-3"
                             ),
                             dbc.Row(
                                 [
-                                    create_input_group("FUELEU Future Penalty", "fueleu-future-penalty", DEFAULT_FUELEU_FUTURE_PENALTY,
-                                                       "number", info_text="Future annual penalty", units="EUR/yr", min_val=0),
-                                    create_input_group("Biofuels Spares Cost", "biofuels-spares-cost", DEFAULT_BIOFUELS_SPARES_COST,
-                                                       "number", info_text="Biofuels spares cost per engine hour", units="EUR/h", min_val=0)
+                                    create_input_group(
+                                        "FUELEU Future Penalty", 
+                                        "fueleu-future-penalty", 
+                                        DEFAULT_FUELEU_FUTURE_PENALTY,
+                                        "number", 
+                                        info_text="Future annual penalty", 
+                                        units="EUR/yr", 
+                                        min_val=0
+                                    ),
+                                    create_input_group(
+                                        "Biofuels Spares Cost", 
+                                        "biofuels-spares-cost", 
+                                        DEFAULT_BIOFUELS_SPARES_COST,
+                                        "number", 
+                                        info_text="Biofuels spares cost per engine hour", 
+                                        units="EUR/h", 
+                                        min_val=0
+                                    )
                                 ],
                                 className="mb-3"
                             ),
                             dbc.Row(
                                 [
-                                    create_input_group("Shore Power Maintenance/Day", "shore-maint-cost", DEFAULT_SHORE_MAINT_COST,
-                                                       "number", info_text="Daily shore power maintenance cost", units="EUR/day", min_val=0),
-                                    create_input_group("Shore Power Spares/Day", "shore-spares-cost", DEFAULT_SHORE_SPARES_COST,
-                                                       "number", info_text="Daily shore power spares cost", units="EUR/day", min_val=0)
+                                    create_input_group(
+                                        "Shore Power Maintenance/Day", 
+                                        "shore-maint-cost", 
+                                        DEFAULT_SHORE_MAINT_COST,
+                                        "number", 
+                                        info_text="Daily shore power maintenance cost", 
+                                        units="EUR/day", 
+                                        min_val=0
+                                    ),
+                                    create_input_group(
+                                        "Shore Power Spares/Day", 
+                                        "shore-spares-cost", 
+                                        DEFAULT_SHORE_SPARES_COST,
+                                        "number", 
+                                        info_text="Daily shore power spares cost", 
+                                        units="EUR/day", 
+                                        min_val=0
+                                    )
                                 ],
                                 className="mb-3"
                             ),
                             dbc.Row(
                                 [
-                                    create_input_group("Parasitic Load Engine", "parasitic-load", DEFAULT_PARASITIC_LOAD,
-                                                       "number", info_text="Parasitic load factor (0-1)", min_val=0, max_val=1),
-                                    create_input_group("Biofuels Blend (%)", "biofuels-blend", DEFAULT_BIOFUELS_BLEND * 100,
-                                                       "number", info_text="Biofuels blend percentage (0-100)", units="%", min_val=0, max_val=100)
+                                    create_input_group(
+                                        "Parasitic Load Engine", 
+                                        "parasitic-load", 
+                                        DEFAULT_PARASITIC_LOAD,
+                                        "number", 
+                                        info_text="Parasitic load factor (0-1)", 
+                                        min_val=0, 
+                                        max_val=1
+                                    ),
+                                    create_input_group(
+                                        "Biofuels Blend (%)", 
+                                        "biofuels-blend", 
+                                        DEFAULT_BIOFUELS_BLEND,
+                                        "number", 
+                                        info_text="Biofuels blend percentage (0-100)", 
+                                        units="%", 
+                                        min_val=0, 
+                                        max_val=100
+                                    )
                                 ],
                                 className="mb-3"
                             ),
                             dbc.Row(
                                 [
-                                    create_input_group("Inflation Rate", "inflation-rate", DEFAULT_INFLATION_RATE * 100,
-                                                       "number", info_text="Annual inflation rate (0-100)", units="%", min_val=0),
-                                    create_input_group("NPV Rate", "npv-rate", DEFAULT_NPV_RATE * 100,
-                                                       "number", info_text="Net present value discount rate (0-100)", units="%", min_val=0)
+                                    dbc.Col(
+                                        [
+                                            dbc.Label("Future Aux Fuel Scenarios"),
+                                            dcc.Dropdown(
+                                                id="scenario-future-aux-fuel",
+                                                options=FUEL_OPTIONS,
+                                                value=DEFAULT_SCENARIO_FUTURE_AUX_FUEL,  # default selection; change as needed
+                                                multi=True,
+                                                placeholder="Select future auxiliary fuel scenarios"
+                                            ),
+                                            dbc.FormText("Select one or more fuel types to analyze for future auxiliary fuel scenarios.")
+                                        ],
+                                        md=6
+                                    )
                                 ],
                                 className="mb-3"
                             ),
                             dbc.Row(
                                 [
-                                    create_input_group("CAPEX", "capex", DEFAULT_CAPEX, "number",
-                                                       info_text="Capital expenditure", units="EUR", min_val=0, col_size=6)
+                                    create_input_group(
+                                        "Inflation Rate", 
+                                        "inflation-rate", 
+                                        DEFAULT_INFLATION_RATE * 100,
+                                        "number", 
+                                        info_text="Annual inflation rate (0-100)", 
+                                        units="%", 
+                                        min_val=0
+                                    ),
+                                    create_input_group(
+                                        "NPV Rate", 
+                                        "npv-rate", 
+                                        DEFAULT_NPV_RATE * 100,
+                                        "number", 
+                                        info_text="Net present value discount rate (0-100)", 
+                                        units="%", 
+                                        min_val=0
+                                    )
+                                ],
+                                className="mb-3"
+                            ),
+                            dbc.Row(
+                                [
+                                    create_input_group(
+                                        "CAPEX", 
+                                        "capex", 
+                                        DEFAULT_CAPEX, 
+                                        "number",
+                                        info_text="Capital expenditure", 
+                                        units="EUR", 
+                                        min_val=0, 
+                                        col_size=6
+                                    )
                                 ],
                                 className="mb-3"
                             ),
@@ -636,15 +736,16 @@ def layout():
                                     id="currency-choice",
                                     value=DEFAULT_CURRENCY,
                                     input_type="dropdown",
-                                    options=[{"label": "EUR", "value": "EUR"},
-                                            {"label": "USD", "value": "USD"},
-                                            {"label": "GBP", "value": "GBP"}],
+                                    options=[
+                                        {"label": "EUR", "value": "EUR"},
+                                        {"label": "USD", "value": "USD"},
+                                        {"label": "GBP", "value": "GBP"}
+                                    ],
                                     info_text="Select reporting currency",
                                     col_size=4
                                 ),
                                 className="mb-3"
                             ),
-                            
                         ],
                         style={"padding": "20px"}
                     ),
@@ -652,7 +753,7 @@ def layout():
                 className="mb-4",
                 style={"boxShadow": "0 2px 10px rgba(0,0,0,0.1)", "borderRadius": "8px"}
             ),
-    
+                
             dbc.Button(
                 "Calculate Emissions & Costs",
                 id="calculate-button",
@@ -665,7 +766,7 @@ def layout():
                 className="mt-3",
                 style={"color": TEXT_COLOR, "textAlign": "center"}
             ),
-    
+
             # -----------------------------
             # Debug Section
             # -----------------------------
@@ -691,7 +792,7 @@ def layout():
                 className="mt-3 mb-5",
                 id="debug-section"
             ),
-    
+
             # -----------------------------
             # Footer
             # -----------------------------
@@ -705,6 +806,5 @@ def layout():
                     "marginTop": "20px"
                 }
             )
-        ],
-        fluid=True
+        ]
     )
