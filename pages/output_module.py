@@ -889,11 +889,11 @@ def get_opex_comparison_table(api_data, currency):
     spares_savings = savings_data.get("savings_spare_cost", 0)
     spares_savings_perc = savings_perc_data.get("perc_savings_spare_cost", 0)
 
-    eu_ets_savings = 0
-    eu_ets_savings_perc = 0
+    eu_ets_savings = savings_data.get("savings_eu_ets")
+    eu_ets_savings_perc = savings_perc_data.get("perc_savings_spare_cost", 0)
 
     fueleu_savings = savings_data.get("savings_fuel_eu", 0)
-    fueleu_savings_perc = savings_perc_data.get("perc_savings_fuel_eu", 0)
+    fueleu_savings_perc = savings_perc_data.get("perc_savings_eu_ets", 0)
 
     # 3) Build rows
     rows = [

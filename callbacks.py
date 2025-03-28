@@ -12,7 +12,7 @@ import numpy as np
 import pages
 import pages.power_profiles
 import pages.input_module
-from pages.input_module import get_vessel_details, DEFAULT_VESSEL
+from pages.input_module import get_vessel_details, DEFAULT_VESSEL, DEFAULT_SCENARIO_FUTURE_AUX_FUEL
 from pages.output_module import (
     get_current_output_table,
     get_future_output_table,
@@ -69,6 +69,12 @@ def build_api_url(params, endpoint):
 def fetch_dashboard_scenarios(vessel_data, future_data):
     vessel_data = merge_vessel_data(vessel_data)
     future_data = future_data or {}
+    
+    # Handle scenario_future_aux_fuel: convert list to comma-separated string
+    scenario_aux_fuels = future_data.get("scenario-future-aux-fuel", DEFAULT_SCENARIO_FUTURE_AUX_FUEL)
+    if isinstance(scenario_aux_fuels, list):
+        scenario_aux_fuels = ",".join(scenario_aux_fuels)
+    
     params = {
         "vessel_id": vessel_data.get("imo", 11111),
         "main_engine_power_kw": float(vessel_data.get("total_engine_power", 38400)),
@@ -104,7 +110,7 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
         "AUX_ENGINE_TYPE": vessel_data.get("AUX_ENGINE_TYPE", "4-STROKE"),
         "price_conversion": float(vessel_data.get("price_conversion", 1)),
         # NEW parameter for future aux fuel scenarios:
-        "scenario_future_aux_fuel": future_data.get("scenario-future-aux-fuel", "MDO,LFO,HFO")
+        "scenario_future_aux_fuel":  scenario_aux_fuels
     }
     qs = urlencode(params, doseq=True)
     url = f"{config.DASHBOARD_ENDPOINT}?{qs}"
@@ -232,8 +238,8 @@ def update_future_inputs_callback(vessel_data, future_data):
         float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))) / 100.0,
         float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))) / 100.0,
         future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY)),
-        future_data.get("scenario-future-aux-fuel", vessel_data.get("scenario-future-aux-fuel",DEFAULT_SCENARIO_FUTURE_AUX_FUEL)),
-        future_data.get("FUTURE-CO2-REDUCTION",vessel_data.get("FUTURE-CO2-REDUCTION", DEFAULT_FUTURE_CO2_REDUCTION))
+        future_data.get("scenario-future-aux-fuel", DEFAULT_SCENARIO_FUTURE_AUX_FUEL),
+        float(future_data.get("FUTURE-CO2-REDUCTION",vessel_data.get("FUTURE-CO2-REDUCTION", DEFAULT_FUTURE_CO2_REDUCTION)))
         
     )
 
