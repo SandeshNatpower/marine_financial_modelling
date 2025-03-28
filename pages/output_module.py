@@ -23,16 +23,30 @@ def format_number(value):
         return "-"
     return f"{value:,.0f}"
 
+
 def format_days(day_value):
     """Formats the day value for header display."""
     if day_value is None:
         return "-"
     return f"{day_value} days / year"
 
+
 def get_currency_symbol(currency):
     """Retrieve currency symbol from config; if not found, return the currency itself."""
     return config.CURRENCIES.get(currency, {}).get("symbol", currency)
 
+
+def safe_format_percentage(value):
+    """Format percentage safely."""
+    if value is None:
+        return "-"
+    return f"{value:.0f}%"
+
+def style_savings(value):
+    """Return a CSS class for styling based on positive/negative savings."""
+    if value is None:
+        return ""
+    return "text-danger" if value < 0 else "text-success"
 # =============================================================================
 # TABLE FUNCTIONS
 # =============================================================================
@@ -43,7 +57,7 @@ def get_current_output_table(api_data, currency):
     working_days_data = (current.get("working_days") or [{}])[0]
     sailing_days = working_days_data.get("sailing_days", 175)      # sample: 175
     working_days = working_days_data.get("working_days", 165)      # sample: 165
-    idle_days    = 75  # override to sample value
+    idle_days    = working_days_data.get("working_days", 75)
     shore_days   = 0   # override to sample value
 
     # ----- Engine / Power -----
@@ -60,12 +74,6 @@ def get_current_output_table(api_data, currency):
     working_energy = power_day.get("working_energy_req_kwh_day", 460800)
     idle_energy    = power_day.get("idle_energy_req_kwh_day", 151680)
     avg_energy     = power_day.get("power_req_day", 521578)
-
-    # ----- Engine Hours -----
-    sailing_hrs = 24
-    working_hrs = 24
-    idle_hrs    = 24
-    avg_hrs     = 24
 
     # ----- Average SFC -----
     sfc_data = (current.get("average_sfc") or [{}])[0]
@@ -197,15 +205,6 @@ def get_current_output_table(api_data, currency):
             html.Td(format_number(working_power)),
             html.Td(format_number(idle_power)),
             html.Td("-"),
-            html.Td(format_number(max_power))
-        ]),
-        html.Tr([
-            html.Td("Average power"),
-            html.Td("kW"),
-            html.Td(format_number(sailing_power)),
-            html.Td(format_number(working_power)),
-            html.Td(format_number(idle_power)),
-            html.Td("-"),
             html.Td(format_number(avg_power_req))
         ]),
         html.Tr([
@@ -216,15 +215,6 @@ def get_current_output_table(api_data, currency):
             html.Td(format_number(idle_energy)),
             html.Td("-"),
             html.Td(format_number(avg_energy))
-        ]),
-        html.Tr([
-            html.Td("Engine hours"),
-            html.Td("hrs"),
-            html.Td(format_number(sailing_hrs)),
-            html.Td(format_number(working_hrs)),
-            html.Td(format_number(idle_hrs)),
-            html.Td("-"),
-            html.Td(format_number(avg_hrs))
         ]),
         html.Tr([
             html.Td("Average SFC"),
@@ -412,37 +402,8 @@ def get_current_output_table(api_data, currency):
 
     return html.Div(table, className="table-responsive")
 
-import dash_bootstrap_components as dbc
-from dash import html
-import config
 
-def format_number(value):
-    """Formats a number with commas (e.g., 123456 -> '123,456')."""
-    if value is None:
-        return "-"
-    return f"{value:,.0f}"
 
-def format_days(day_value):
-    """Formats the day value for header display."""
-    if day_value is None:
-        return "-"
-    return f"{day_value} days / year"
-
-def get_currency_symbol(currency):
-    """Retrieve currency symbol from config; if not found, return the currency itself."""
-    return config.CURRENCIES.get(currency, {}).get("symbol", currency)
-
-def safe_format_percentage(value):
-    """Format percentage safely."""
-    if value is None:
-        return "-"
-    return f"{value:.0f}%"
-
-def style_savings(value):
-    """Return a CSS class for styling based on positive/negative savings."""
-    if value is None:
-        return ""
-    return "text-danger" if value < 0 else "text-success"
 
 # ---------------------------------------------------------------------------
 # Future Output Table
@@ -464,6 +425,7 @@ def get_future_output_table(api_data, currency):
     working_power = power_data.get("working_power", 11520)
     idle_power    = power_data.get("idle_power", 798)
     shore_power   = power_data.get("shore_power", 0)
+    avg_power     = power_data.get("avg_shore_power_req_day")
     
     # Energy Requirement Data
     energy_data = (future.get("power_calc_day") or [{}])[0]
@@ -472,13 +434,6 @@ def get_future_output_table(api_data, currency):
     idle_energy    = energy_data.get("idle_energy_req_kwh_day", 19150)
     shore_energy   = energy_data.get("shore_energy_req_kwh_day", 0)
     avg_energy     = int((sailing_energy + working_energy + idle_energy + shore_energy) / 4.0)
-
-    # Engine hours (hard-coded)
-    sailing_engine_hrs = 24
-    working_engine_hrs = 24
-    idle_engine_hrs    = 24
-    shore_engine_hrs   = 24
-    avg_engine_hrs     = 24
 
     # Average SFC Data
     sfc_data = (future.get("average_sfc") or [{}])[0]
@@ -623,17 +578,7 @@ def get_future_output_table(api_data, currency):
             html.Td(format_number(working_power)),
             html.Td(format_number(idle_power)),
             html.Td(format_number(shore_power) if shore_power else "-"),
-            html.Td(format_number(max_power))
-        ]),
-        # Average power
-        html.Tr([
-            html.Td("Average power"),
-            html.Td("kW"),
-            html.Td(format_number(sailing_power)),
-            html.Td(format_number(working_power)),
-            html.Td(format_number(idle_power)),
-            html.Td(format_number(shore_power) if shore_power else "-"),
-            html.Td("N/A")
+            html.Td(format_number(avg_power))
         ]),
         # Energy required
         html.Tr([
@@ -644,16 +589,6 @@ def get_future_output_table(api_data, currency):
             html.Td(format_number(idle_energy)),
             html.Td(format_number(shore_energy) if shore_energy else "-"),
             html.Td(format_number(avg_energy))
-        ]),
-        # Engine hours
-        html.Tr([
-            html.Td("Engine hours"),
-            html.Td("hrs/day"),
-            html.Td(format_number(sailing_engine_hrs)),
-            html.Td(format_number(working_engine_hrs)),
-            html.Td(format_number(idle_engine_hrs)),
-            html.Td(format_number(shore_engine_hrs)),
-            html.Td(format_number(avg_engine_hrs))
         ]),
         # Average SFC
         html.Tr([
@@ -989,6 +924,76 @@ def get_opex_comparison_table(api_data, currency):
     table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
+
+def get_opex_comparison_table_year(api_data, currency):
+    """
+    Build a YEARLY OPEX comparison table using:
+      - Yearly values from api_data["opex_year"]
+      - Yearly savings from api_data["opex_table_year"]
+    """
+    conventional_year = (api_data.get("opex_year") or [{}])[0]
+    conv_total = conventional_year.get("total_opex_year", 0)
+
+    # For yearly savings, opex_table_year is assumed to be a dictionary
+    opex_year_data = api_data.get("opex_table_year", {})
+    savings_data = (opex_year_data.get("Savings") or [{}])
+    savings_perc_data = (opex_year_data.get("Savings_perc") or [{}])
+    savings = savings_data[0] if savings_data else {}
+    savings_perc = savings_perc_data[0] if savings_perc_data else {}
+
+    total_savings = (
+         savings.get("savings_fuel_eu_year", 0) +
+         savings.get("savings_fuel_price_year", 0) +
+         savings.get("savings_maintenance_cost_year", 0) +
+         savings.get("savings_spare_cost_year", 0) +
+         savings.get("savings_eu_ets_year", 0)
+    )
+    fut_total = conv_total - total_savings
+    total_savings_perc = (total_savings / conv_total * 100) if conv_total != 0 else 0
+
+    row = {
+        "metric": "OPEX Total",
+        "conv": conv_total,
+        "fut": fut_total,
+        "savings": total_savings,
+        "savings_perc": total_savings_perc
+    }
+
+    formatted_conv = format_number(row["conv"])
+    formatted_fut = format_number(row["fut"])
+    formatted_savings = format_number(row["savings"])
+    savings_perc_val = float(row["savings_perc"])
+    if savings_perc_val > 0:
+        formatted_perc = f"-{abs(savings_perc_val):.0f}%"
+    elif savings_perc_val < 0:
+        formatted_perc = f"+{abs(savings_perc_val):.0f}%"
+    else:
+        formatted_perc = "0%"
+    
+    table_rows = [
+        html.Tr([
+            html.Td(row["metric"]),
+            html.Td(get_currency_symbol(currency)),
+            html.Td(formatted_conv),
+            html.Td(formatted_fut),
+            html.Td(formatted_savings, className=style_savings(row["savings"])),
+            html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
+        ])
+    ]
+
+    header = html.Thead(html.Tr([
+        html.Th("OPEX"),
+        html.Th("per year"),
+        html.Th(f"Conventional ({get_currency_symbol(currency)}/year)"),
+        html.Th(f"After measures ({get_currency_symbol(currency)}/year)"),
+        html.Th(f"Savings ({get_currency_symbol(currency)}/year)"),
+        html.Th("Savings (%)")
+    ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
+
+    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
+    return html.Div(table, className="table-responsive")
+
+
 # ---------------------------------------------------------------------------
 # Emissions Comparison Table
 # ---------------------------------------------------------------------------
@@ -1076,7 +1081,97 @@ def get_emissions_comparison_table(api_data):
     table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
+def get_emissions_comparison_table_year(api_data):
+    """
+    Build a yearly emissions comparison table using:
+      - Yearly values from the "emissions_table_year" object in the API response.
+    """
+    emissions_year = api_data.get("emissions_table_year", {})
+    savings_data = (emissions_year.get("Savings") or [{}])[0]
+    savings_perc_data = (emissions_year.get("Savings_perc") or [{}])[0]
 
+    # The yearly values are assumed to be provided already:
+    co2_ttw_conv = savings_data.get("savings_avg_co2_ttw_year", 0)  # Here, you may need to use your API keys.
+    # In many cases, the savings in the yearly table might be reported directly.
+    # If you prefer to compute yearly conventional and future values from daily averages,
+    # multiply the daily averages (from current_table and future_output_table) by 365.
+    # For this example, we assume the yearly table contains the needed data.
+    
+    # For demonstration, we use the following keys from your sample:
+    co2_ttw_conv = (api_data.get("current_table", {}).get("co2_emission_ttw") or [{}])[0].get("avg_co2_ttw_day", 182084) * 365
+    co2_ttw_fut  = (api_data.get("future_output_table", {}).get("co2_emission_ttw") or [{}])[0].get("future_avg_co2_ttw_day", 143153) * 365
+    co2_ttw_savings = (emissions_year.get("Savings") or [{}])[0].get("savings_avg_co2_ttw_year", 0)
+    co2_ttw_savings_perc = (emissions_year.get("Savings_perc") or [{}])[0].get("perc_savings_avg_co2_ttw_year", 0)
+
+    co2_wtw_conv = (api_data.get("current_table", {}).get("co2_emission_wtw") or [{}])[0].get("avg_co2_wtw_day", 216479) * 365
+    co2_wtw_fut  = (api_data.get("future_output_table", {}).get("co2_emission_wtw") or [{}])[0].get("future_avg_co2_wtw_day", 174889) * 365
+    co2_wtw_savings = (emissions_year.get("Savings") or [{}])[0].get("savings_avg_co2_wtw_year", 0)
+    co2_wtw_savings_perc = (emissions_year.get("Savings_perc") or [{}])[0].get("perc_savings_avg_co2_wtw_year", 0)
+
+    nox_conv = (api_data.get("current_table", {}).get("nox_emission_ttw") or [{}])[0].get("avg_nox_ttw_day", 3070) * 365
+    nox_fut  = (api_data.get("future_output_table", {}).get("nox_emission_ttw") or [{}])[0].get("future_avg_nox_ttw_day", 2432) * 365
+    nox_savings = (emissions_year.get("Savings") or [{}])[0].get("savings_avg_nox_ttw_year", 0)
+    nox_savings_perc = (emissions_year.get("Savings_perc") or [{}])[0].get("perc_savings_avg_nox_ttw_year", 0)
+
+    sox_conv = (api_data.get("current_table", {}).get("sox_emission_ttw") or [{}])[0].get("avg_sox_ttw_day", 136) * 365
+    sox_fut  = (api_data.get("future_output_table", {}).get("sox_emission_ttw") or [{}])[0].get("future_avg_sox_ttw_day", 96) * 365
+    sox_savings = (emissions_year.get("Savings") or [{}])[0].get("savings_avg_sox_ttw_year", 0)
+    sox_savings_perc = (emissions_year.get("Savings_perc") or [{}])[0].get("perc_savings_avg_sox_ttw_year", 0)
+
+    pm_conv = (api_data.get("current_table", {}).get("pm_emission_ttw") or [{}])[0].get("avg_pm_ttw_day", 54) * 365
+    pm_fut  = (api_data.get("future_output_table", {}).get("pm_emission_ttw") or [{}])[0].get("future_avg_pm_ttw_day", 43) * 365
+    pm_savings = (emissions_year.get("Savings") or [{}])[0].get("savings_avg_pm_ttw_year", 0)
+    pm_savings_perc = (emissions_year.get("Savings_perc") or [{}])[0].get("perc_savings_avg_pm_ttw_year", 0)
+
+    ch4_conv = (api_data.get("current_table", {}).get("ch4_emission_ttw") or [{}])[0].get("avg_ch4_ttw_day", 3) * 365
+    ch4_fut  = (api_data.get("future_output_table", {}).get("ch4_emission_ttw") or [{}])[0].get("future_avg_ch4_ttw_day", 4) * 365
+    ch4_savings = (emissions_year.get("Savings") or [{}])[0].get("savings_avg_ch4_ttw_year", 0)
+    ch4_savings_perc = (emissions_year.get("Savings_perc") or [{}])[0].get("perc_savings_avg_ch4_ttw_year", 0)
+
+    rows = [
+        {"metric": "CO₂ Emissions TtW", "conv": co2_ttw_conv, "fut": co2_ttw_fut, "savings": co2_ttw_savings, "savings_perc": co2_ttw_savings_perc},
+        {"metric": "CO₂ Emissions WtW", "conv": co2_wtw_conv, "fut": co2_wtw_fut, "savings": co2_wtw_savings, "savings_perc": co2_wtw_savings_perc},
+        {"metric": "NOₓ Emissions TtW", "conv": nox_conv, "fut": nox_fut, "savings": nox_savings, "savings_perc": nox_savings_perc},
+        {"metric": "SOₓ Emissions TtW", "conv": sox_conv, "fut": sox_fut, "savings": sox_savings, "savings_perc": sox_savings_perc},
+        {"metric": "PM Emissions TtW", "conv": pm_conv, "fut": pm_fut, "savings": pm_savings, "savings_perc": pm_savings_perc},
+        {"metric": "CH₄ Emissions TtW", "conv": ch4_conv, "fut": ch4_fut, "savings": ch4_savings, "savings_perc": ch4_savings_perc},
+    ]
+
+    table_rows = []
+    for row in rows:
+        conv_val = float(row.get("conv") or 0)
+        fut_val = float(row.get("fut") or 0)
+        savings_val = float(row.get("savings") or 0)
+        savings_perc_val = float(row.get("savings_perc") or 0)
+        formatted_conv = format_number(conv_val)
+        formatted_fut = format_number(fut_val)
+        formatted_savings = format_number(savings_val)
+        if savings_perc_val > 0:
+            formatted_perc = f"-{abs(savings_perc_val):.0f}%"
+        elif savings_perc_val < 0:
+            formatted_perc = f"+{abs(savings_perc_val):.0f}%"
+        else:
+            formatted_perc = "0%"
+        table_rows.append(html.Tr([
+            html.Td(row["metric"]),
+            html.Td("kg"),
+            html.Td(formatted_conv),
+            html.Td(formatted_fut),
+            html.Td(formatted_savings, className=style_savings(row["savings"])),
+            html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
+        ]))
+
+    header = html.Thead(html.Tr([
+        html.Th("Emissions"),
+        html.Th("per year"),
+        html.Th("Conventional (kg/year)"),
+        html.Th("After measures (kg/year)"),
+        html.Th("Savings (kg/year)"),
+        html.Th("Savings (%)")
+    ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
+
+    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
+    return html.Div(table, className="table-responsive")
 
 def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     """Centralized layout configuration with fixed sizing to avoid compression."""
@@ -1340,11 +1435,14 @@ def dwelling_at_berth_pie_figure(api_data, currency="USD"):
         return go.Figure().update_layout(title="No Data Available")
     
     costs = api_data["current_table"].get("costs", [{}])[0]
-    labels = ["Engine Maintenance", "Spares", "FuelEU Penalty"]
+    fuel = api_data["current_table"].get("fuel_price", [{}])[0]
+    labels = ["Fuel","Maintenance", "Spares/consumables", "EU ETS", "FuelEU"]
     values = [
-        costs.get("engine_maintenance_costs", 0),
-        costs.get("spares_consumables_costs", 0),
-        costs.get("fueleu_current_penalty", 0)
+        fuel.get("avg_fuel_price_day", 0),
+        costs.get("avg_engine_maintenance_costs_day", 0),
+        costs.get("avg_spares_consumables_costs_day", 0),
+        costs.get("avg_eu_ets",0),
+        costs.get("avg_fueleu_day", 0)
     ]
     fig = go.Figure(go.Pie(
         labels=labels,
@@ -1365,12 +1463,14 @@ def future_dwelling_at_berth_pie_figure(api_data, currency="USD"):
         return go.Figure().update_layout(title="No Data Available")
     
     costs = api_data["future_output_table"].get("costs", [{}])[0]
-    labels = ["Engine Maintenance", "Spares", "FuelEU Penalty", "Shore Power"]
+    fuel = api_data["future_output_table"].get("fuel_price", [{}])[0]
+    labels = ["Fuel","Maintenance", "Spares/consumables", "EU ETS", "FuelEU"]
     values = [
+        fuel.get("future_avg_fuel_price_day", 0),
         costs.get("future_avg_engine_maintenance_costs_day", 0),
         costs.get("future_avg_spares_consumables_costs_day", 0),
-        costs.get("future_avg_fueleu_day", 0),
-        costs.get("shore_power_maintenance_per_day", 0) + costs.get("shore_power_spares_per_day", 0)
+        costs.get("future_eu_ets",0),
+        costs.get("future_avg_fueleu_day", 0)
     ]
     fig = go.Figure(go.Pie(
         labels=labels,
@@ -1446,8 +1546,7 @@ def dashboard_layout(api_data, currency="USD"):
                 ], className="mb-4")
             ])
         ], className="mb-4")
-    ], fluid=True)
-
+    ], fluid=True)  # dbc.Container accepts fluid=True
 
 def layout():
     return dbc.Container([
@@ -1457,19 +1556,31 @@ def layout():
             dbc.Col([
                 html.Label("Select Tables", className="font-weight-bold"),
                 dcc.Checklist(
-                    id="table-selection-dropdown",
+                    id='table-selection-dropdown',
                     options=[
                         {"label": "Current Output", "value": "current"},
                         {"label": "Future Output", "value": "future"},
                         {"label": "OPEX Comparison", "value": "opex"},
                         {"label": "Emissions Comparison", "value": "emissions"}
                     ],
-                    value=["opex", "emissions"],
+                    value=['opex', 'emissions'],
                     labelStyle={"display": "inline-block", "marginRight": "10px"},
                     inputStyle={"marginRight": "5px"}
+                ),
+                html.Br(),
+                html.Label("Timeframe", className="font-weight-bold"),
+                dcc.RadioItems(
+                    id="timeframe-toggle",
+                    options=[
+                        {"label": "Daily", "value": "day"},
+                        {"label": "Yearly", "value": "year"}
+                    ],
+                    value="day",
+                    labelStyle={"display": "inline-block", "marginRight": "10px"}
                 )
             ], md=12, xs=12)
         ], className="mb-4"),
-        html.Div(id="output-content", 
+        html.Div(id='output-content', 
                  style={"padding": "20px", "backgroundColor": "#f8f9fa", "borderRadius": "8px"})
-    ], fluid=True, className="py-4")
+    ], fluid=True, className="py-4")  # Use dbc.Container here, not html.Div
+

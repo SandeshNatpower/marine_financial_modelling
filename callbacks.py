@@ -17,7 +17,9 @@ from pages.output_module import (
     get_current_output_table,
     get_future_output_table,
     get_opex_comparison_table,
+    get_opex_comparison_table_year,
     get_emissions_comparison_table,
+    get_emissions_comparison_table_year,
     dashboard_layout,
     cashflow_figure,
     totex_figure,
@@ -250,7 +252,7 @@ def update_future_inputs_callback(vessel_data, future_data):
         float(future_data.get("biofuels-blend", vessel_data.get("biofuels-blend", DEFAULT_BIOFUELS_BLEND))),
         float(future_data.get("shore-maint-cost", vessel_data.get("shore-maint-cost", DEFAULT_SHORE_MAINT_COST))),
         float(future_data.get("shore-spares-cost", vessel_data.get("shore-spares-cost", DEFAULT_SHORE_SPARES_COST))),
-        float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))) / 100.0,
+        float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))),
         float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))) / 100.0,
         future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY)),
         scenario_str,
@@ -671,11 +673,15 @@ def register_callbacks(app):
     
     @app.callback(
         Output("output-content", "children"),
-        [Input("api-data-store", "data"),
-         Input("future-data-store", "data"),
-         Input("table-selection-dropdown", "value")]
+        [
+            Input("api-data-store", "data"),
+            Input("future-data-store", "data"),
+            Input("table-selection-dropdown", "value"),
+            Input("timeframe-toggle", "value")  # New input for day/year toggle
+        ]
     )
-    def display_emissions_output(api_data, future_data, selected_tables):
+    def display_emissions_output(api_data, future_data, selected_tables, timeframe):
+
         if not api_data:
             return html.Div(
                 dbc.Alert("No data available. Please calculate emissions and costs first.", color="warning"),
@@ -687,48 +693,68 @@ def register_callbacks(app):
                 className="mt-4"
             )
         
+        # Use the currency from future data if available, else default to EUR
         currency = (future_data or {}).get("currency-choice", "EUR")
+        conv_factor = config.CURRENCIES.get(currency, {}).get("conversion", 1.0)
         sections = []
+        
+        # Current Output Table remains the same
         if 'current' in selected_tables:
             sections.append(
                 dbc.Card(
                     [
                         dbc.CardHeader(html.H4("Current Output Table")),
-                        dbc.CardBody(get_current_output_table(api_data, currency))
+                        dbc.CardBody(get_current_output_table(api_data, conv_factor))
                     ],
                     className="mb-4"
                 )
             )
+        
+        # Future Output Table remains the same
         if 'future' in selected_tables:
             sections.append(
                 dbc.Card(
                     [
                         dbc.CardHeader(html.H4("Future Output Table")),
-                        dbc.CardBody(get_future_output_table(api_data, currency))
+                        dbc.CardBody(get_future_output_table(api_data, conv_factor))
                     ],
                     className="mb-4"
                 )
             )
+        
+        # For OPEX Comparison, choose daily or yearly based on the toggle
         if 'opex' in selected_tables:
+            if timeframe == "day":
+                opex_table = get_opex_comparison_table(api_data, currency)
+            else:
+                opex_table = get_opex_comparison_table_year(api_data, currency)
             sections.append(
                 dbc.Card(
                     [
                         dbc.CardHeader(html.H4("OPEX Comparison")),
-                        dbc.CardBody(get_opex_comparison_table(api_data, currency))
+                        dbc.CardBody(opex_table)
                     ],
                     className="mb-4"
                 )
             )
+        
+        # For Emissions Comparison, choose daily or yearly based on the toggle
         if 'emissions' in selected_tables:
+            if timeframe == "day":
+                emissions_table = get_emissions_comparison_table(api_data)
+            else:
+                emissions_table = get_emissions_comparison_table_year(api_data)
             sections.append(
                 dbc.Card(
                     [
                         dbc.CardHeader(html.H4("Emissions Comparison")),
-                        dbc.CardBody(get_emissions_comparison_table(api_data))
+                        dbc.CardBody(emissions_table)
                     ],
                     className="mb-4"
                 )
             )
+        
+        # Dashboard content (if any)
         dash_layout_content = dashboard_layout(api_data, currency)
         sections.append(
             dbc.Card(
@@ -739,5 +765,7 @@ def register_callbacks(app):
                 className="mb-4"
             )
         )
+        
         return html.Div(sections)
+
 
