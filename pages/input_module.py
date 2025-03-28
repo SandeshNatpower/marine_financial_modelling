@@ -49,7 +49,7 @@ DEFAULT_SHORE_MAINT_COST = 480
 DEFAULT_SHORE_SPARES_COST = 480
 DEFAULT_BIOFUELS_SPARES_COST = 3
 DEFAULT_SHORE_ENABLE = False
-FUTURE_CO2_REDUCTION = 26
+DEFAULT_FUTURE_CO2_REDUCTION = 26
 
 # New defaults for engine speed
 DEFAULT_MAIN_ENGINE_SPEED = "MEDIUM"
@@ -558,9 +558,7 @@ def layout():
                                 create_input_group("Engine Maintenance Cost", "engine-maint-cost", DEFAULT_ENGINE_MAINT_COST,
                                                    "number", info_text="Maintenance cost per engine hour", units="EUR/h", min_val=0),
                                 create_input_group("Spares/Consumables Cost", "spares-cost", DEFAULT_SPARES_COST,
-                                                   "number", info_text="Spares cost per engine hour", units="EUR/h", min_val=0),
-                                create_input_group("FUELEU Current Penalty", "fueleu-penalty", DEFAULT_FUELEU_CURRENT_PENALTY,
-                                                   "number", info_text="Current annual penalty", units="EUR/yr", min_val=0)
+                                                   "number", info_text="Spares cost per engine hour", units="EUR/h", min_val=0)
                             ]
                         ),
                         style={"padding": "20px"}
@@ -606,15 +604,7 @@ def layout():
                             ),
                             dbc.Row(
                                 [
-                                    create_input_group(
-                                        "FUELEU Future Penalty", 
-                                        "fueleu-future-penalty", 
-                                        DEFAULT_FUELEU_FUTURE_PENALTY,
-                                        "number", 
-                                        info_text="Future annual penalty", 
-                                        units="EUR/yr", 
-                                        min_val=0
-                                    ),
+
                                     create_input_group(
                                         "Biofuels Spares Cost", 
                                         "biofuels-spares-cost", 
@@ -721,7 +711,7 @@ def layout():
                                     create_input_group(
                                         "Future CO2 Reduction Target",
                                         "FUTURE-CO2-REDUCTION",
-                                        FUTURE_CO2_REDUCTION,
+                                        DEFAULT_FUTURE_CO2_REDUCTION,
                                         "number",
                                         info_text="Future CO2 Reduction Target in percentage (0-100)",
                                         units="%",

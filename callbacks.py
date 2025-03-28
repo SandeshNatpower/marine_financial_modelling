@@ -92,7 +92,6 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
         "SHORE_POWER_SPARES_PER_DAY": float(vessel_data.get("SHORE_POWER_SPARES_PER_DAY", 480)),
         "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(future_data.get("biofuels-spares-cost", 3)),
         "FUELEU_CURRENT_PENALTY_PER_YEAR": float(vessel_data.get("FUELEU_CURRENT_PENALTY_PER_YEAR", 729348.5444)),
-        "FUELEU_FUTURE_PENALTY_PER_YEAR": float(future_data.get("fueleu-future-penalty", 0)),
         "PARASITIC_LOAD_ENGINE": float(future_data.get("parasitic-load", 0.95)),
         "BIOFUELS_BLEND_PERCENTAGE": float(future_data.get("biofuels-blend", 0.3)),
         "shore_enable": str(vessel_data.get("shore_enable", False)).lower(),
@@ -210,7 +209,6 @@ def update_future_inputs_callback(vessel_data, future_data):
         DEFAULT_FUTURE_MAIN_FUEL_TYPE,
         DEFAULT_FUTURE_AUX_FUEL_TYPE,
         DEFAULT_BIOFUELS_SPARES_COST,
-        DEFAULT_FUELEU_FUTURE_PENALTY,
         DEFAULT_PARASITIC_LOAD,
         DEFAULT_BIOFUELS_BLEND,
         DEFAULT_SHORE_MAINT_COST,
@@ -219,7 +217,7 @@ def update_future_inputs_callback(vessel_data, future_data):
         DEFAULT_NPV_RATE,
         DEFAULT_CURRENCY,
         DEFAULT_SCENARIO_FUTURE_AUX_FUEL,
-        FUTURE_CO2_REDUCTION
+        DEFAULT_FUTURE_CO2_REDUCTION
     )
     vessel_data = merge_vessel_data(vessel_data)
     future_data = future_data or {}
@@ -227,7 +225,6 @@ def update_future_inputs_callback(vessel_data, future_data):
         future_data.get("future-main-fuel-type", vessel_data.get("future-main-fuel-type", DEFAULT_FUTURE_MAIN_FUEL_TYPE)),
         future_data.get("future-aux-fuel-type", vessel_data.get("future-aux-fuel-type", DEFAULT_FUTURE_AUX_FUEL_TYPE)),
         float(future_data.get("biofuels-spares-cost", vessel_data.get("biofuels-spares-cost", DEFAULT_BIOFUELS_SPARES_COST))),
-        float(future_data.get("fueleu-future-penalty", vessel_data.get("fueleu-future-penalty", DEFAULT_FUELEU_FUTURE_PENALTY))),
         float(future_data.get("parasitic-load", vessel_data.get("parasitic-load", DEFAULT_PARASITIC_LOAD))),
         float(future_data.get("biofuels-blend", vessel_data.get("biofuels-blend", DEFAULT_BIOFUELS_BLEND))),
         float(future_data.get("shore-maint-cost", vessel_data.get("shore-maint-cost", DEFAULT_SHORE_MAINT_COST))),
@@ -235,8 +232,8 @@ def update_future_inputs_callback(vessel_data, future_data):
         float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))) / 100.0,
         float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))) / 100.0,
         future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY)),
-        future_data.get("scenario-future-aux-fuel", DEFAULT_SCENARIO_FUTURE_AUX_FUEL),
-        future_data.get("FUTURE-CO2-REDUCTION", FUTURE_CO2_REDUCTION)
+        future_data.get("scenario-future-aux-fuel", vessel_data.get("scenario-future-aux-fuel",DEFAULT_SCENARIO_FUTURE_AUX_FUEL)),
+        future_data.get("FUTURE-CO2-REDUCTION",vessel_data.get("FUTURE-CO2-REDUCTION", DEFAULT_FUTURE_CO2_REDUCTION))
         
     )
 
@@ -335,8 +332,7 @@ def register_callbacks(app):
          Output('working-engine-load', 'value'),
          Output('shore-engine-load', 'value'),
          Output('engine-maint-cost', 'value'),
-         Output('spares-cost', 'value'),
-         Output('fueleu-penalty', 'value')],
+         Output('spares-cost', 'value')],
         Input('vessel-data-store', 'data'),
         prevent_initial_call=True
     )
@@ -355,30 +351,30 @@ def register_callbacks(app):
             vessel_data.get('working_engine_load', 0.3),
             vessel_data.get('shore_engine_load', 0.395),
             vessel_data.get('ENGINE_MAINTENANCE_COSTS_PER_HOUR', 20),
-            vessel_data.get('SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR', 2),
-            vessel_data.get('FUELEU_CURRENT_PENALTY_PER_YEAR', 729348.5444)
+            vessel_data.get('SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR', 2)
         )
     
     @app.callback(
         [Output('future-main-fuel-type', 'value'),
-         Output('future-aux-fuel-type', 'value'),
-         Output('biofuels-spares-cost', 'value'),
-         Output('fueleu-future-penalty', 'value'),
-         Output('parasitic-load', 'value'),
-         Output('biofuels-blend', 'value'),
-         Output('shore-maint-cost', 'value'),
-         Output('shore-spares-cost', 'value'),
-         Output('inflation-rate', 'value'),
-         Output('npv-rate', 'value'),
-         Output('currency-choice', 'value')],
-         Output('scenario-future-aux-fuel', 'value'),
-         Output('FUTURE-CO2-REDUCTION', 'value'),
+        Output('future-aux-fuel-type', 'value'),
+        Output('biofuels-spares-cost', 'value'),
+        Output('parasitic-load', 'value'),
+        Output('biofuels-blend', 'value'),
+        Output('shore-maint-cost', 'value'),
+        Output('shore-spares-cost', 'value'),
+        Output('inflation-rate', 'value'),
+        Output('npv-rate', 'value'),
+        Output('currency-choice', 'value'),
+        Output('scenario-future-aux-fuel', 'value'),
+        Output('FUTURE-CO2-REDUCTION', 'value')],
         [Input('vessel-data-store', 'data'),
-         Input('future-data-store', 'data')],
+        Input('future-data-store', 'data')],
         prevent_initial_call=True
     )
     def update_future_inputs(vessel_data, future_data):
         return update_future_inputs_callback(vessel_data, future_data)
+
+
     
     @app.callback(
         [Output('api-data-store', 'data'),
@@ -399,11 +395,9 @@ def register_callbacks(app):
             State('shore-engine-load', 'value'),
             State('engine-maint-cost', 'value'),
             State('spares-cost', 'value'),
-            State('fueleu-penalty', 'value'),
             State('future-main-fuel-type', 'value'),
             State('future-aux-fuel-type', 'value'),
             State('biofuels-spares-cost', 'value'),
-            State('fueleu-future-penalty', 'value'),
             State('parasitic-load', 'value'),
             State('biofuels-blend', 'value'),
             State('shore-maint-cost', 'value'),
@@ -420,6 +414,7 @@ def register_callbacks(app):
             State('aux-engine-type', 'value'),
             State('vessel-data-store', 'data'),
             State('future-data-store', 'data'),
+            State('scenario-future-aux-fuel', 'value'),
             State('FUTURE-CO2-REDUCTION', 'value'),
             State('currency-choice', 'value')
         ],
@@ -431,13 +426,13 @@ def register_callbacks(app):
         (main_power, aux_power, main_fuel_type, aux_fuel_type, 
          sailing_days, working_days, idle_days, shore_days,
          sailing_engine_load, working_engine_load, shore_engine_load,
-         engine_maint_cost, spares_cost, fueleu_penalty,
+         engine_maint_cost, spares_cost,
          future_main_fuel_type, future_aux_fuel_type, biofuels_spares_cost,
-         fueleu_future_penalty, parasitic_load, biofuels_blend,
+         parasitic_load, biofuels_blend,
          shore_maint_cost, shore_spares_cost, shore_enable, npv_rate, capex,
          shore_port, reporting_year, inflation_rate,
          main_engine_speed, main_engine_type,
-         aux_engine_speed, aux_engine_type, vessel_data, future_data,FUTURE_CO2_REDUCTION, currency_choice) = values
+         aux_engine_speed, aux_engine_type, vessel_data, future_data,scenario_future_aux_fuel,FUTURE_CO2_REDUCTION, currency_choice) = values
         
         if not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
             return None, None, "input"
@@ -473,8 +468,6 @@ def register_callbacks(app):
             "SHORE_POWER_MAINTENANCE_PER_DAY": float(shore_maint_cost),
             "SHORE_POWER_SPARES_PER_DAY": float(shore_spares_cost),
             "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(biofuels_spares_cost),
-            "FUELEU_CURRENT_PENALTY_PER_YEAR": float(fueleu_penalty),
-            "FUELEU_FUTURE_PENALTY_PER_YEAR": float(fueleu_future_penalty),
             "PARASITIC_LOAD_ENGINE": float(parasitic_load),
             "BIOFUELS_BLEND_PERCENTAGE": blend_value,
             "shore_enable": shore_enable_bool,
