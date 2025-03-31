@@ -28,9 +28,9 @@ DEFAULT_VESSEL = {
     "shore_power_kw": 2020,  # kW
     "main_engine_power_kw": 38400,  # kW
     "aux_engine_power_kw": 2020,  # kW
-    "sailing_engine_load": 0.5,  # Fraction (0-1)
-    "working_engine_load": 0.3,  # Fraction (0-1)
-    "shore_engine_load": 0.395,  # Fraction (0-1)
+    "sailing_engine_load": 50,  # Fraction (0-1)
+    "working_engine_load": 30,  # Fraction (0-1)
+    "shore_engine_load": 39.5,  # Fraction (0-1)
     "sailing_days": 199,  # Days per year
     "working_days": 40,  # Days per year
     "idle_days": 126,  # Days per year
@@ -48,8 +48,8 @@ DEFAULT_VESSEL = {
     "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,  # EUR/hour
     "FUELEU_CURRENT_PENALTY_PER_YEAR": 729348.5444,  # EUR/year
     "FUELEU_FUTURE_PENALTY_PER_YEAR": 0,  # EUR/year
-    "PARASITIC_LOAD_ENGINE": 0.95,  # Fraction (0-1)
-    "BIOFUELS_BLEND_PERCENTAGE": 0.3,  # Fraction (0-1)
+    "PARASITIC_LOAD_ENGINE": 95,  # Fraction (0-1)
+    "BIOFUELS_BLEND_PERCENTAGE": 30,  # Fraction (0-1)
     "shore_enable": False,  # Boolean
     "inflation_rate": 0.02,  # Fraction (0-1)
     "npv_rate": 0,  # Fraction (0-1)

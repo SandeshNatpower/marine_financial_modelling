@@ -222,18 +222,29 @@ def cashflow_figure(dashboard_data=None):
     return fig
 
 def totex_figure(dashboard_data=None):
-    """Vertical bar chart from live data"""
-    _, scenarios = load_totex_scenarios(dashboard_data)
-    labels, values = [], []
-    
-    for label, sc in scenarios.items():
-        if sc.get("TOTEX"):
-            labels.append(label)
-            values.append(sum(sc["TOTEX"]))
-    
+    """Vertical bar chart for TOTEX comparison from live dashboard data.
+
+    Expects `dashboard_data` to be a dict where each key (scenario) maps to a list of records.
+    Each record should have a "min_future_opex" field (which may be null).
+    """
+    if dashboard_data is None:
+        fig = go.Figure().update_layout(title="No Data Available")
+        return fig
+
+    labels = []
+    values = []
+    # Iterate over each scenario (e.g. "MDO", "MDO_With_Shore_Power", etc.)
+    for scenario, records in dashboard_data.items():
+        # Sum min_future_opex across all records, treating None as 0
+        total_opex = sum(record.get("min_future_opex") or 0 for record in records)
+        labels.append(scenario)
+        values.append(total_opex)
+
     fig = go.Figure([go.Bar(x=labels, y=values)])
+    # Use the shared layout function (assumed defined elsewhere) to set layout
     set_figure_layout(fig, "TOTEX Comparison (Vertical)", "Scenario", "TOTEX")
     return fig
+
 
 def totex_horizontal_figure(dashboard_data=None):
     """Horizontal bar chart from live data"""
@@ -358,14 +369,14 @@ def financial_metrics_layout():
                     html.Br(),
                     dcc.Graph(id="metric-comparison-chart", className="chart-container"),
                     html.Hr(),
-                    dcc.Graph(id="cashflow-graph", className="chart-container"),
+                    dcc.Graph(id="totex-horizontal-graph", className="chart-container"),
+                    html.Hr(),
+                    card_component("Dwelling at Berth - Biofuel Blend Minimum Static values",
+                                  dcc.Graph(id="dwelling-pie-chart", className="chart-container")),
+                                        dcc.Graph(id="cashflow-graph", className="chart-container"),
                     html.Hr(),
                     dcc.Graph(id="totex-vertical-graph", className="chart-container"),
                     html.Hr(),
-                    dcc.Graph(id="totex-horizontal-graph", className="chart-container"),
-                    html.Hr(),
-                    card_component("Dwelling at Berth - Biofuel Blend Minimum",
-                                  dcc.Graph(id="dwelling-pie-chart", className="chart-container"))
                 ]
             )
         ],
@@ -494,8 +505,8 @@ def layout():
         [
             dbc.Tabs(
                 [
-                    dbc.Tab(multi_chart_dashboard_layout(), label="Dashboard"),
                     dbc.Tab(financial_metrics_layout(), label="Financial Metrics"),
+                    dbc.Tab(multi_chart_dashboard_layout(), label="Dashboard"),
                     dbc.Tab(power_demand_layout(), label="Power Demand Analysis")
                 ]
             )

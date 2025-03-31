@@ -47,6 +47,10 @@ def style_savings(value):
     if value is None:
         return ""
     return "text-danger" if value < 0 else "text-success"
+
+
+
+
 # =============================================================================
 # TABLE FUNCTIONS
 # =============================================================================

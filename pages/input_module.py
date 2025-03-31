@@ -25,9 +25,9 @@ DEFAULT_SHORE_DAYS = 0
 DEFAULT_REPORTING_YEAR = 2030
 DEFAULT_FUELEU_CURRENT_PENALTY = 729348.5444
 DEFAULT_FUELEU_FUTURE_PENALTY = 0
-DEFAULT_PARASITIC_LOAD = 0.95
-DEFAULT_BIOFUELS_BLEND = 0.3
-DEFAULT_INFLATION_RATE = 0.02
+DEFAULT_PARASITIC_LOAD = 95
+DEFAULT_BIOFUELS_BLEND = 30
+DEFAULT_INFLATION_RATE = 2
 DEFAULT_NPV_RATE = 0
 DEFAULT_CAPEX = 19772750
 DEFAULT_MAIN_ENGINE_POWER = 38400
@@ -49,7 +49,6 @@ DEFAULT_SHORE_MAINT_COST = 480
 DEFAULT_SHORE_SPARES_COST = 480
 DEFAULT_BIOFUELS_SPARES_COST = 3
 DEFAULT_SHORE_ENABLE = False
-DEFAULT_FUTURE_CO2_REDUCTION = 26
 
 # New defaults for engine speed
 DEFAULT_MAIN_ENGINE_SPEED = "MEDIUM"
@@ -528,11 +527,11 @@ def layout():
                             dbc.Row(
                                 [
                                     create_input_group("Sailing Engine Load", "sailing-engine-load", DEFAULT_SAILING_ENGINE_LOAD,
-                                                       "number", info_text="Engine load during sailing (0-1)", min_val=0, max_val=1, units=""),
+                                                       "number", info_text="Engine load during sailing (0-100)", min_val=0, max_val=100, units="%"),
                                     create_input_group("Working Engine Load", "working-engine-load", DEFAULT_WORKING_ENGINE_LOAD,
-                                                       "number", info_text="Engine load during working (0-1)", min_val=0, max_val=1, units=""),
+                                                       "number", info_text="Engine load during working (0-100)", min_val=0, max_val=100, units="%"),
                                     create_input_group("Shore Engine Load", "shore-engine-load", DEFAULT_SHORE_ENGINE_LOAD,
-                                                       "number", info_text="Engine load at shore (0-1)", min_val=0, max_val=1, units="")
+                                                       "number", info_text="Engine load at shore (0-100)", min_val=0, max_val=100, units="%")
                                 ]
                             )
                         ],
@@ -647,9 +646,10 @@ def layout():
                                         "parasitic-load", 
                                         DEFAULT_PARASITIC_LOAD,
                                         "number", 
-                                        info_text="Parasitic load factor (0-1)", 
+                                        info_text="Parasitic load percentage (0-100)", 
                                         min_val=0, 
-                                        max_val=1
+                                        max_val=100,
+                                        units = "%"
                                     ),
                                     create_input_group(
                                         "Biofuels Blend (%)", 
@@ -659,26 +659,7 @@ def layout():
                                         info_text="Biofuels blend percentage (0-100)", 
                                         units="%", 
                                         min_val=0, 
-                                        max_val=100
-                                    )
-                                ],
-                                className="mb-3"
-                            ),
-                            dbc.Row(
-                                [
-                                    dbc.Col(
-                                        [
-                                            dbc.Label("Future Aux Fuel Scenarios"),
-                                            dcc.Dropdown(
-                                                id="scenario-future-aux-fuel",
-                                                options=FUEL_OPTIONS,
-                                                value=DEFAULT_SCENARIO_FUTURE_AUX_FUEL,  # default selection; change as needed
-                                                multi=True,
-                                                placeholder="Select future auxiliary fuel scenarios"
-                                            ),
-                                            dbc.FormText("Select one or more fuel types to analyze for future auxiliary fuel scenarios.")
-                                        ],
-                                        md=6
+                                        max_val=100     
                                     )
                                 ],
                                 className="mb-3"
@@ -688,7 +669,7 @@ def layout():
                                     create_input_group(
                                         "Inflation Rate", 
                                         "inflation-rate", 
-                                        DEFAULT_INFLATION_RATE * 100,
+                                        DEFAULT_INFLATION_RATE,
                                         "number", 
                                         info_text="Annual inflation rate (0-100)", 
                                         units="%", 
@@ -702,21 +683,6 @@ def layout():
                                         info_text="Net present value discount rate (0-100)", 
                                         units="%", 
                                         min_val=0
-                                    )
-                                ],
-                                className="mb-3"
-                            ),
-                            dbc.Row(
-                                [
-                                    create_input_group(
-                                        "Future CO2 Reduction Target",
-                                        "FUTURE-CO2-REDUCTION",
-                                        DEFAULT_FUTURE_CO2_REDUCTION,
-                                        "number",
-                                        info_text="Future CO2 Reduction Target in percentage (0-100)",
-                                        units="%",
-                                        min_val=0,
-                                        max_val=100
                                     )
                                 ],
                                 className="mb-3"

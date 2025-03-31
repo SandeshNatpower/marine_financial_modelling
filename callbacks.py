@@ -66,7 +66,7 @@ def build_api_url(params, endpoint):
     return url
 
 # -------------------------------------------------------------------------------
-# Dashboard Scenarios: include the new parameter scenario_future_aux_fuel.
+# Dashboard Scenarios:
 # -------------------------------------------------------------------------------
 def process_scenario_value(scenario_value, default="Diesel-Bio-diesel"):
     """Process the scenario fuel values into a comma-separated list."""
@@ -80,22 +80,19 @@ def process_scenario_value(scenario_value, default="Diesel-Bio-diesel"):
     return [default]
 
 # -------------------------------------------------------------------------------
-# Dashboard Scenarios: Include the new parameter scenario_future_aux_fuel.
+# Dashboard Scenarios:
 # -------------------------------------------------------------------------------
 def fetch_dashboard_scenarios(vessel_data, future_data):
     vessel_data = merge_vessel_data(vessel_data)
     future_data = future_data or {}
-    # Process the scenario value into a list then join as a comma-separated string.
-    scenario_list = process_scenario_value(future_data.get("scenario-future-aux-fuel"))
-    scenario_str = ",".join(scenario_list)  # Now a single string
     
     params = {
         "vessel_id": vessel_data.get("imo", 11111),
         "main_engine_power_kw": float(vessel_data.get("total_engine_power", 38400)),
         "aux_engine_power_kw": float(vessel_data.get("average_hoteling_kw", 2020)),
-        "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 0.5)),
-        "working_engine_load": float(vessel_data.get("working_engine_load", 0.3)),
-        "shore_engine_load": float(vessel_data.get("shore_engine_load", 0.395)),
+        "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 50)/100),
+        "working_engine_load": float(vessel_data.get("working_engine_load", 30)/100),
+        "shore_engine_load": float(vessel_data.get("shore_engine_load", 39.5)/100),
         "sailing_days": float(vessel_data.get("sailing_days", 0.1)),
         "working_days": float(vessel_data.get("working_days", 0.1)),
         "idle_days": int(vessel_data.get("idle_days", 126)),
@@ -112,10 +109,10 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
         "SHORE_POWER_SPARES_PER_DAY": float(vessel_data.get("SHORE_POWER_SPARES_PER_DAY", 480)),
         "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(future_data.get("biofuels-spares-cost", 3)),
         # Penalty parameters removed
-        "PARASITIC_LOAD_ENGINE": float(future_data.get("parasitic-load", 0.95)),
-        "BIOFUELS_BLEND_PERCENTAGE": float(future_data.get("biofuels-blend", 0.3)),
+        "PARASITIC_LOAD_ENGINE": float(future_data.get("parasitic-load", 95)/100),
+        "BIOFUELS_BLEND_PERCENTAGE": float(future_data.get("biofuels-blend", 30)/100),
         "shore_enable": str(vessel_data.get("shore_enable", False)).lower(),
-        "inflation_rate": float(future_data.get("inflation-rate", 0.02)),
+        "inflation_rate": float(future_data.get("inflation-rate", 2))/100,
         "npv_rate": float(future_data.get("npv-rate", 0)),
         "CAPEX": float(vessel_data.get("CAPEX", 19772750)),
         "MAIN_ENGINE_SPEED": vessel_data.get("MAIN_ENGINE_SPEED", "MEDIUM"),
@@ -123,8 +120,6 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
         "AUX_ENGINE_SPEED": vessel_data.get("AUX_ENGINE_SPEED", "MEDIUM"),
         "AUX_ENGINE_TYPE": vessel_data.get("AUX_ENGINE_TYPE", "4-STROKE"),
         "price_conversion": float(vessel_data.get("price_conversion", 1)),
-        # Now send a single parameter value that is comma-separated.
-        "scenario_future_aux_fuel": scenario_str
     }
     qs = urlencode(params, doseq=True)
     url = f"{config.DASHBOARD_ENDPOINT}?{qs}"
@@ -175,8 +170,7 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "MAIN_ENGINE_TYPE": "4-Stroke",
         "AUX_ENGINE_SPEED": "MEDIUM",
         "AUX_ENGINE_TYPE": "4-Stroke",
-        "price_conversion": 1,
-        "FUTURE_CO2_REDUCTION": 26
+        "price_conversion": 1
     }
     vessel_data = merge_vessel_data(vessel_data_override)
     vessel_overrides = {
@@ -197,13 +191,13 @@ def get_financial_data(input_params=None, vessel_data_override=None):
     if input_params and "biofuels_blend" in input_params:
         try:
             blend_value = float(input_params["biofuels_blend"])
-            final_params["BIOFUELS_BLEND_PERCENTAGE"] = (blend_value / 100.0 if blend_value > 1 else blend_value)
+            final_params["BIOFUELS_BLEND_PERCENTAGE"] = (blend_value / 100.0 if blend_value  else 0.3)
         except ValueError:
             raise ValueError("Invalid biofuels blend percentage provided.")
     else:
         final_params["BIOFUELS_BLEND_PERCENTAGE"] = float(final_params.get("BIOFUELS_BLEND_PERCENTAGE", 0.3))
     
-    if final_params["BIOFUELS_BLEND_PERCENTAGE"] > 1:
+    if final_params["BIOFUELS_BLEND_PERCENTAGE"] > 100:
         raise ValueError("Biofuel blend percentage cannot exceed 100%")
     
     for key in ["sailing_days", "working_days", "idle_days"]:
@@ -236,14 +230,9 @@ def update_future_inputs_callback(vessel_data, future_data):
         DEFAULT_INFLATION_RATE,
         DEFAULT_NPV_RATE,
         DEFAULT_CURRENCY,
-        DEFAULT_SCENARIO_FUTURE_AUX_FUEL,
-        DEFAULT_FUTURE_CO2_REDUCTION
     )
     vessel_data = merge_vessel_data(vessel_data)
     future_data = future_data or {}
-    # Process scenario value into a comma-separated string.
-    scenario_list = process_scenario_value(future_data.get("scenario-future-aux-fuel"), DEFAULT_SCENARIO_FUTURE_AUX_FUEL)
-    scenario_str = ",".join(scenario_list)
     return (
         future_data.get("future-main-fuel-type", vessel_data.get("future-main-fuel-type", DEFAULT_FUTURE_MAIN_FUEL_TYPE)),
         future_data.get("future-aux-fuel-type", vessel_data.get("future-aux-fuel-type", DEFAULT_FUTURE_AUX_FUEL_TYPE)),
@@ -253,10 +242,8 @@ def update_future_inputs_callback(vessel_data, future_data):
         float(future_data.get("shore-maint-cost", vessel_data.get("shore-maint-cost", DEFAULT_SHORE_MAINT_COST))),
         float(future_data.get("shore-spares-cost", vessel_data.get("shore-spares-cost", DEFAULT_SHORE_SPARES_COST))),
         float(future_data.get("inflation-rate", vessel_data.get("inflation-rate", DEFAULT_INFLATION_RATE))),
-        float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))) / 100.0,
-        future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY)),
-        scenario_str,
-        float(future_data.get("FUTURE-CO2-REDUCTION", vessel_data.get("FUTURE-CO2-REDUCTION", DEFAULT_FUTURE_CO2_REDUCTION)))
+        float(future_data.get("npv-rate", vessel_data.get("npv-rate", DEFAULT_NPV_RATE))),
+        future_data.get("currency-choice", vessel_data.get("currency-choice", DEFAULT_CURRENCY))
     )
 
 # -------------------------------------------------------------------------------
@@ -386,9 +373,7 @@ def register_callbacks(app):
          Output('shore-spares-cost', 'value'),
          Output('inflation-rate', 'value'),
          Output('npv-rate', 'value'),
-         Output('currency-choice', 'value'),
-         Output('scenario-future-aux-fuel', 'value'),
-         Output('FUTURE-CO2-REDUCTION', 'value')],
+         Output('currency-choice', 'value')],
         [Input('vessel-data-store', 'data'),
          Input('future-data-store', 'data')],
         prevent_initial_call=True
@@ -435,8 +420,6 @@ def register_callbacks(app):
             State('aux-engine-type', 'value'),
             State('vessel-data-store', 'data'),
             State('future-data-store', 'data'),
-            State('scenario-future-aux-fuel', 'value'),
-            State('FUTURE-CO2-REDUCTION', 'value'),
             State('currency-choice', 'value')
         ],
         prevent_initial_call=True
@@ -456,8 +439,7 @@ def register_callbacks(app):
             shore_port, reporting_year, inflation_rate,
             main_engine_speed, main_engine_type,
             aux_engine_speed, aux_engine_type, vessel_data,
-            existing_future_data, scenario_future_aux_fuel, FUTURE_CO2_REDUCTION,
-            currency_choice
+            existing_future_data,currency_choice
         ) = values
         
         if not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
@@ -473,8 +455,6 @@ def register_callbacks(app):
             "shore-spares-cost": shore_spares_cost,
             "inflation-rate": inflation_rate,
             "npv-rate": npv_rate,
-            "scenario-future-aux-fuel": scenario_future_aux_fuel,
-            "FUTURE-CO2-REDUCTION": FUTURE_CO2_REDUCTION,
             "currency-choice": currency_choice,
             "shore-enable": shore_enable,
             "capex": capex
@@ -491,7 +471,7 @@ def register_callbacks(app):
         if blend_value > 1:
             blend_value /= 100.0
         
-        # Build Financial API parameters WITHOUT scenario_future_aux_fuel
+
         params = {
             "vessel_id": vessel_data.get("imo", 9803613),
             "main_engine_power_kw": float(main_power),
@@ -505,19 +485,19 @@ def register_callbacks(app):
             "idle_days": int(idle_days),
             "shore_days": int(shore_days),
             "shore_port": int(shore_port),
-            "sailing_engine_load": float(sailing_engine_load),
-            "working_engine_load": float(working_engine_load),
-            "shore_engine_load": float(shore_engine_load),
+            "sailing_engine_load": float(sailing_engine_load)/100 if sailing_engine_load else 0.5,
+            "working_engine_load": float(working_engine_load)/100 if working_engine_load else 0.3,
+            "shore_engine_load": float(shore_engine_load)/100 if sailing_engine_load else 0.4,
             "reporting_year": int(reporting_year),
             "ENGINE_MAINTENANCE_COSTS_PER_HOUR": float(engine_maint_cost),
             "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(spares_cost),
             "SHORE_POWER_MAINTENANCE_PER_DAY": float(shore_maint_cost),
             "SHORE_POWER_SPARES_PER_DAY": float(shore_spares_cost),
             "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(biofuels_spares_cost),
-            "PARASITIC_LOAD_ENGINE": float(parasitic_load),
+            "PARASITIC_LOAD_ENGINE": float(parasitic_load)/100 if parasitic_load else 0.95,
             "BIOFUELS_BLEND_PERCENTAGE": blend_value,
             "shore_enable": shore_enable_bool,
-            "inflation_rate": float(inflation_rate) if inflation_rate else 0.02,
+            "inflation_rate": float(inflation_rate)/100 if inflation_rate else 0.02,
             "npv_rate": float(npv_rate) / 100.0,
             "CAPEX": float(capex),
             "MAIN_ENGINE_SPEED": main_engine_speed,
@@ -525,7 +505,6 @@ def register_callbacks(app):
             "AUX_ENGINE_SPEED": aux_engine_speed,
             "AUX_ENGINE_TYPE": aux_engine_type,
             "price_conversion": price_conversion,
-            "FUTURE_CO2_REDUCTION": float(FUTURE_CO2_REDUCTION) / 100
         }
         
         if params["BIOFUELS_BLEND_PERCENTAGE"] > 1:
@@ -568,7 +547,7 @@ def register_callbacks(app):
         dwelling = pages.power_profiles.dwelling_at_berth_pie_figure()
         _, scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data)
         scenario_options = [{"label": k, "value": k} for k in scenarios.keys()]
-        default_scenarios = list(scenarios.keys())[:3]
+        default_scenarios = list(scenarios.keys())[:]
         return cashflow, totex_vert, totex_horiz, dwelling, scenario_options, default_scenarios
     
     @app.callback(
@@ -704,7 +683,7 @@ def register_callbacks(app):
                 dbc.Card(
                     [
                         dbc.CardHeader(html.H4("Current Output Table")),
-                        dbc.CardBody(get_current_output_table(api_data, conv_factor))
+                        dbc.CardBody(get_current_output_table(api_data, currency))
                     ],
                     className="mb-4"
                 )
@@ -716,7 +695,7 @@ def register_callbacks(app):
                 dbc.Card(
                     [
                         dbc.CardHeader(html.H4("Future Output Table")),
-                        dbc.CardBody(get_future_output_table(api_data, conv_factor))
+                        dbc.CardBody(get_future_output_table(api_data, currency))
                     ],
                     className="mb-4"
                 )
