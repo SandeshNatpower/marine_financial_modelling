@@ -778,5 +778,5 @@ def layout():
                     "marginTop": "20px"
                 }
             )
-        ]
+        ],fluid= True
     )

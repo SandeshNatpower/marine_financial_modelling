@@ -1,0 +1,6 @@
+#technology_db.csv
+
+Technology,CO2 Reduction (%),Cost (USD/kW),Maturity
+LNG Retrofit,20,1500,Commercial
+Battery Hybrid,40,3000,Demonstration
+Hydrogen Fuel Cells,100,5000,Research

@@ -1501,51 +1501,68 @@ def dashboard_layout(api_data, currency="USD"):
                 dbc.Row([
                     dbc.Col(dcc.Graph(
                         figure=totex_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width":"100%","height":"100%"}
                     ), md=12)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(
                         figure=cashflow_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width":"100%","height":"100%"}
+                        
                     ), md=12)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(
                         figure=penalty_cost_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width":"100%", "height":"100%"}
                     ), md=12)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(
                         figure=dwelling_at_berth_pie_figure(api_data, currency),
                         config={"displayModeBar": False},
-                        style={"width": "100%", "height": "600px"}
+                        responsive=True,
+                        style={"width": "100%", "height": "100%"}
                     ), md=6),
                     dbc.Col(dcc.Graph(
                         figure=future_dwelling_at_berth_pie_figure(api_data, currency),
                         config={"displayModeBar": False},
-                        style={"width": "100%", "height": "600px"}
+                        responsive=True,
+                        style={"width": "100%", "height": "100%"}
                     ), md=6)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(
                         figure=maintenance_cost_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width": "100%", "height": "100%"}
                     ), md=6),
                     dbc.Col(dcc.Graph(
                         figure=spares_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width": "100%", "height": "100%"}
                     ), md=6)
                 ], className="mb-4"),
                 dbc.Row([
                     dbc.Col(dcc.Graph(
                         figure=fuel_consumption_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width": "100%", "height": "100%"}
                     ), md=6),
                     dbc.Col(dcc.Graph(
                         figure=opex_cost_figure(api_data, currency), 
-                        config={"displayModeBar": False}
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width": "100%", "height": "100%"}
                     ), md=6)
                 ], className="mb-4")
             ])
@@ -1587,4 +1604,3 @@ def layout():
         html.Div(id='output-content', 
                  style={"padding": "20px", "backgroundColor": "#f8f9fa", "borderRadius": "8px"})
     ], fluid=True, className="py-4")  # Use dbc.Container here, not html.Div
-
