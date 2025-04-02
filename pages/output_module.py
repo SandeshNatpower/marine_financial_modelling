@@ -1180,7 +1180,7 @@ def get_emissions_comparison_table_year(api_data):
 def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     """Centralized layout configuration with fixed sizing to avoid compression."""
     fig.update_layout(
-        title=dict(text=title, x=0.5, xanchor="center", font=dict(color="#0A4B8C")),
+        title=dict(text="<b>" + title + "</b>", x=0.5, xanchor="center", font=dict(color="#0A4B8C")),
         xaxis_title=xaxis_title,
         yaxis_title=yaxis_title,
         template=TEMPLATE_STYLE,

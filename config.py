@@ -56,6 +56,15 @@ DEFAULT_VESSEL = {
     "CAPEX": 19772750  # EUR
 }
 
+DEFAULT_PLACES =  {
+      "idle_days": 8,
+      "port_id": 5269,
+      "port_name": "SINGAPORE",
+      "total_ci_mwh": 1357.9852,
+      "working_days": 3
+    }
+
+
 # Fuel Options for UI Selection
 FUEL_OPTIONS = [
     {"label": "Marine Diesel Oil (MDO)", "value": "MDO"},

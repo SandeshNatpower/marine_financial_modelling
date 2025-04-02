@@ -16,6 +16,7 @@ FUEL_OPTIONS = config.FUEL_OPTIONS
 
 # The default vessel is still provided by config but can be overwritten
 DEFAULT_VESSEL = config.DEFAULT_VESSEL
+DEFAULT_PLACES = config.DEFAULT_PLACES
 
 # Default values aligned with API requirements (used initially in the UI)
 DEFAULT_SAILING_DAYS = 199
@@ -123,19 +124,17 @@ def get_vessel_details(search_term, search_type='imo'):
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        if isinstance(data, dict) and "vessel_summary" in data:
-            if data["vessel_summary"]:
+        if isinstance(data, dict) and "vessel_summary" and "places_summary"in data:
+            if data["vessel_summary"] and data["places_summary"]:
                 # Extract the first vessel and return it.
-                return data["vessel_summary"][0]
+                return data["vessel_summary"][0], data["places_summary"]
             else:
-                return DEFAULT_VESSEL    
-        elif isinstance(data, list) and data:
-            return data[0]
+                return DEFAULT_VESSEL, DEFAULT_PLACES
         else:
-            return DEFAULT_VESSEL
+            return DEFAULT_VESSEL, DEFAULT_PLACES
     except requests.RequestException as e:
         print(f"Exception fetching vessel details: {e}")
-        return DEFAULT_VESSEL
+        return DEFAULT_VESSEL, DEFAULT_PLACES
 
 
 # -------------------------------------------------------------------------------
@@ -187,6 +186,166 @@ def get_vessel_image_path(vessel_type):
 
     # 3) Final fallback: default image
     return "default_vessel.png"
+
+
+
+def get_places_summary_table(vessel_data):
+    
+    import pandas as pd
+    from dash import html, dash_table
+    """
+    Generate a Dash HTML layout showing:
+      - A title header and summary
+      - A summary statistics section
+      - A DataTable with columns for Port Name, Energy (MWh), % of Total, Idle Days, Working Days, and MWh/Working Day.
+    
+    Args:
+        vessel_data (dict or list): The vessel data that contains 'places_summary' or is a list of place dicts.
+
+    Returns:
+        html.Div: A Dash HTML layout containing the summary text and a DataTable.
+    """
+
+    # 1. Extract or assume the list of places
+    if isinstance(vessel_data, dict) and 'places_summary' in vessel_data:
+        places_data = vessel_data['places_summary']
+    elif isinstance(vessel_data, list):
+        places_data = vessel_data
+    else:
+        places_data = []
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(places_data)
+    
+    # If empty, return a "no data" layout
+    if df.empty:
+        return html.Div([
+            html.H3("Port Energy Consumption Dashboard"),
+            html.P("No port data available.")
+        ])
+
+    # 2. Prepare data for table
+    # Ensure numeric columns are recognized
+    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    
+    # Round numeric columns to 2 decimals
+    for col in numeric_cols:
+        df[col] = df[col].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
+    
+    # Calculate total energy and number of ports
+    total_energy = df['total_ci_mwh'].sum()
+    num_ports = len(df)
+    
+    # Calculate how many ports have idle days or working days data
+    ports_with_idle = df['idle_days'].notnull().sum()
+    ports_with_working = df['working_days'].notnull().sum()
+
+    # Create new columns for display:
+    #   % of Total, MWh/Working Day
+    df['percent_of_total'] = df['total_ci_mwh'] / total_energy * 100
+    df['mwh_per_working_day'] = df.apply(
+        lambda row: row['total_ci_mwh'] / row['working_days'] 
+                    if (row.get('working_days') and row['working_days'] != 0) else None, 
+        axis=1
+    )
+
+    # Round these new columns as well
+    df['percent_of_total'] = df['percent_of_total'].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
+    df['mwh_per_working_day'] = df['mwh_per_working_day'].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
+
+    # 3. Reorder and rename columns for a friendlier display
+    df_display = df[[
+        'port_name',         # 1
+        'total_ci_mwh',      # 2
+        'percent_of_total',  # 3
+        'idle_days',         # 4
+        'working_days',      # 5
+        'mwh_per_working_day'# 6
+    ]].rename(columns={
+        'port_name': 'Port Name',
+        'total_ci_mwh': 'Energy (MWh)',
+        'percent_of_total': '% of Total',
+        'idle_days': 'Idle Days',
+        'working_days': 'Working Days',
+        'mwh_per_working_day': 'MWh/Working Day'
+    })
+
+    # 4. Build the DataTable
+    columns = [
+        {"name": "Port Name",         "id": "Port Name",         "type": "text"},
+        {"name": "Energy (MWh)",      "id": "Energy (MWh)",      "type": "numeric"},
+        {"name": "% of Total",        "id": "% of Total",        "type": "numeric"},
+        {"name": "Idle Days",         "id": "Idle Days",         "type": "numeric"},
+        {"name": "Working Days",      "id": "Working Days",      "type": "numeric"},
+        {"name": "MWh/Working Day",   "id": "MWh/Working Day",   "type": "numeric"},
+    ]
+    
+    # Right-align numeric columns
+    numeric_cols_conditional = [
+        {'if': {'column_id': c}, 'textAlign': 'right'}
+        for c in ["Energy (MWh)", "% of Total", "Idle Days", "Working Days", "MWh/Working Day"]
+    ]
+
+    data_table = dash_table.DataTable(
+        data=df_display.to_dict("records"),
+        columns=columns,
+        page_size=10,
+        sort_action="native",
+        filter_action="native",
+        style_table={
+            'width': '100%',
+            'overflowX': 'auto'
+        },
+        style_header={
+            'backgroundColor': '#0A4B8C',
+            'fontWeight': 'bold',
+            'color': 'white',
+            'whiteSpace': 'normal',
+            'textAlign': 'center'
+        },
+        style_cell={
+            'textAlign': 'left',
+            'padding': '5px',
+            'whiteSpace': 'normal',
+            'height': 'auto',
+            'minWidth': '70px',
+            'maxWidth': '120px',
+            'fontSize': '20px'  # Increased font size
+        },
+        style_cell_conditional=numeric_cols_conditional,
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgb(248, 248, 248)'
+            }
+        ]
+    )
+
+    # 5. Build summary text
+    total_energy_text = f"Total MWh: {round(total_energy, 2):,}"
+    num_ports_text = f"Number of Ports: {num_ports}"
+    ports_with_working_text = f"Ports with Working Days Data: {ports_with_working}"
+    ports_with_idle_text = f"Ports with Idle Days Data: {ports_with_idle}"
+
+    # 6. Construct the layout with title, summary, and table
+    layout = html.Div([
+        html.H3("Port Energy Consumption Dashboard"),
+        html.H5(f"Total Energy: {round(total_energy, 2):,} MWh across {num_ports} ports"),
+        html.Div([
+            html.H6("Summary Statistics"),
+            html.Ul([
+                html.Li(total_energy_text),
+                html.Li(num_ports_text),
+                html.Li(ports_with_working_text),
+                html.Li(ports_with_idle_text),
+            ], style={"listStyleType": "none", "paddingLeft": "0px"})
+        ], style={"marginBottom": "20px"}),
+        data_table
+    ], style={"margin": "20px"})
+    
+    return layout
+
+
 
 def layout():
     return dbc.Container(
@@ -260,117 +419,142 @@ def layout():
                         style={"backgroundColor": PRIMARY_COLOR, "padding": "10px 20px"}
                     ),
                     dbc.CardBody(
-                        dbc.Row(
-                            [
-                                # Vessel Image Column
-                                dbc.Col(
-                                    [
-                                        html.Div(
-                                            html.Img(
-                                                id="vessel-image",
-                                                src="/assets/default_vessel.png",
+                        [
+                            # First Row: Image (Left) and Details (Right)
+                            dbc.Row(
+                                [
+                                    # Vessel Image Column (Left)
+                                    dbc.Col(
+                                        [
+                                            html.Div(
+                                                html.Img(
+                                                    id="vessel-image",
+                                                    src="/assets/default_vessel.png",
+                                                    style={
+                                                        "width": "100%",
+                                                        "height": "auto",
+                                                        "maxHeight": "300px",
+                                                        "objectFit": "contain",
+                                                        "borderRadius": "8px",
+                                                        "boxShadow": "0 2px 10px rgba(0,0,0,0.1)"
+                                                    }
+                                                ),
+                                                className="text-center"
+                                            ),
+                                            html.Div(id="vessel-type-display", className="text-center mt-2")
+                                        ],
+                                        md=4, xs=12
+                                    ),
+                                    
+                                    # Vessel Details Column (Right)
+                                    dbc.Col(
+                                        [
+                                            dbc.Row(
+                                                create_input_group(
+                                                    label="Vessel Name",
+                                                    id="vessel-name",
+                                                    value=DEFAULT_VESSEL["vessel_name"],
+                                                    input_type="text",
+                                                    col_size=12,
+                                                    editable=True,
+                                                    info_text="Full vessel name"
+                                                ),
+                                                className="mb-3"
+                                            ),
+                                            dbc.Row(
+                                                [
+                                                    create_input_group(
+                                                        label="IMO Number",
+                                                        id="imo-number",
+                                                        value=DEFAULT_VESSEL["imo"],
+                                                        input_type="number",
+                                                        col_size=6,
+                                                        editable=True,
+                                                        info_text="IMO/MMSI number"
+                                                    ),
+                                                    create_input_group(
+                                                        label="Vessel Category",
+                                                        id="vessel-category",
+                                                        value=DEFAULT_VESSEL["vessel_category"],
+                                                        input_type="text",
+                                                        col_size=6,
+                                                        editable=True,
+                                                        info_text="Vessel category"
+                                                    ),
+                                                ],
+                                                className="mb-3"
+                                            ),
+                                            dbc.Row(
+                                                [
+                                                    create_input_group(
+                                                        label="Gross Tonnage",
+                                                        id="gross-tonnage",
+                                                        value=DEFAULT_VESSEL["gross_tonnage"],
+                                                        input_type="number",
+                                                        col_size=3,
+                                                        editable=True,
+                                                        info_text="Gross tonnage",
+                                                        units="GT"
+                                                    ),
+                                                    create_input_group(
+                                                        label="Deadweight",
+                                                        id="dwt",
+                                                        value=DEFAULT_VESSEL["dwt"],
+                                                        input_type="number",
+                                                        col_size=3,
+                                                        editable=True,
+                                                        info_text="Deadweight tonnage",
+                                                        units="mT"
+                                                    ),
+                                                    create_input_group(
+                                                        label="Year Built",
+                                                        id="year-built",
+                                                        value=DEFAULT_VESSEL["year_built"],
+                                                        input_type="number",
+                                                        col_size=3,
+                                                        editable=True,
+                                                        info_text="Year the vessel was built"
+                                                    ),
+                                                    create_input_group(
+                                                        label="Reporting Year",
+                                                        id="reporting-year",
+                                                        value=DEFAULT_REPORTING_YEAR,
+                                                        input_type="number",
+                                                        col_size=3,
+                                                        editable=True,
+                                                        info_text="Year for financial reporting"
+                                                    ),
+                                                ],
+                                                className="mb-3"
+                                            ),
+                                        ],
+                                        md=8, xs=12
+                                    ),
+                                ],
+                                className="mb-4"
+                            ),
+                            
+                            # Second Row: Places Summary Table (Full Width)
+                            dbc.Row(
+                                [
+                                    dbc.Col(
+                                        [
+                                            html.H5("Port Activity Summary", className="mb-3"),
+                                            html.Div(
+                                                id="places-summary-table-container",  # Container for the table
                                                 style={
                                                     "width": "100%",
-                                                    "height": "auto",
-                                                    "maxHeight": "250px",
-                                                    "objectFit": "contain",
                                                     "borderRadius": "8px",
-                                                    "boxShadow": "0 2px 10px rgba(0,0,0,0.1)"
+                                                    "boxShadow": "0 2px 10px rgba(0,0,0,0.1)",
+                                                    "overflowX": "auto"
                                                 }
-                                            ),
-                                            className="text-center"
-                                        ),
-                                        html.Div(id="vessel-type-display", className="text-center mt-2")
-                                    ],
-                                    md=4, xs=12
-                                ),
-    
-                                # Vessel Details Column
-                                dbc.Col(
-                                    [
-                                        dbc.Row(
-                                            create_input_group(
-                                                label="Vessel Name",
-                                                id="vessel-name",
-                                                value=DEFAULT_VESSEL["vessel_name"],
-                                                input_type="text",
-                                                col_size=12,
-                                                editable=True,
-                                                info_text="Full vessel name"
-                                            ),
-                                            className="mb-3"
-                                        ),
-                                        dbc.Row(
-                                            [
-                                                create_input_group(
-                                                    label="IMO Number",
-                                                    id="imo-number",
-                                                    value=DEFAULT_VESSEL["imo"],
-                                                    input_type="number",
-                                                    col_size=6,
-                                                    editable=True,
-                                                    info_text="IMO/MMSI number"
-                                                ),
-                                                create_input_group(
-                                                    label="Vessel Category",
-                                                    id="vessel-category",
-                                                    value=DEFAULT_VESSEL["vessel_category"],
-                                                    input_type="text",
-                                                    col_size=6,
-                                                    editable=True,
-                                                    info_text="Vessel category"
-                                                ),
-                                            ],
-                                            className="mb-3"
-                                        ),
-                                        dbc.Row(
-                                            [
-                                                create_input_group(
-                                                    label="Gross Tonnage",
-                                                    id="gross-tonnage",
-                                                    value=DEFAULT_VESSEL["gross_tonnage"],
-                                                    input_type="number",
-                                                    col_size=3,
-                                                    editable=True,
-                                                    info_text="Gross tonnage",
-                                                    units="GT"
-                                                ),
-                                                create_input_group(
-                                                    label="Deadweight",
-                                                    id="dwt",
-                                                    value=DEFAULT_VESSEL["dwt"],
-                                                    input_type="number",
-                                                    col_size=3,
-                                                    editable=True,
-                                                    info_text="Deadweight tonnage",
-                                                    units="mT"
-                                                ),
-                                                create_input_group(
-                                                    label="Year Built",
-                                                    id="year-built",
-                                                    value=DEFAULT_VESSEL["year_built"],
-                                                    input_type="number",
-                                                    col_size=3,
-                                                    editable=True,
-                                                    info_text="Year the vessel was built"
-                                                ),
-                                                create_input_group(
-                                                    label="Reporting Year",
-                                                    id="reporting-year",
-                                                    value=DEFAULT_REPORTING_YEAR,
-                                                    input_type="number",
-                                                    col_size=3,
-                                                    editable=True,
-                                                    info_text="Year for financial reporting"
-                                                ),
-                                            ],
-                                            className="mb-3"
-                                        ),
-                                    ],
-                                    md=8, xs=12
-                                )
-                            ]
-                        ),
+                                            )
+                                        ],
+                                        xs=12
+                                    )
+                                ]
+                            )
+                        ],
                         style={"padding": "20px"}
                     ),
                 ],

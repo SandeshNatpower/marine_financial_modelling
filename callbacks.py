@@ -12,7 +12,7 @@ import numpy as np
 import pages
 import pages.power_profiles
 import pages.input_module
-from pages.input_module import get_vessel_details, DEFAULT_VESSEL, DEFAULT_SCENARIO_FUTURE_AUX_FUEL
+from pages.input_module import get_vessel_details, DEFAULT_VESSEL, DEFAULT_PLACES 
 from pages.output_module import (
     get_current_output_table,
     get_future_output_table,
@@ -125,7 +125,7 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
     url = f"{config.DASHBOARD_ENDPOINT}?{qs}"
     print(f"Dashboard API URL: {url}")
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -263,11 +263,29 @@ def register_callbacks(app):
     )
     def search_vessel_callback(n_clicks, search_type, search_term, current_data):
         if not search_term:
-            return (current_data or config.DEFAULT_VESSEL,
-                    "Please enter a search term.")
-        vessel_data = get_vessel_details(search_term, search_type)
-        return vessel_data, f"Found vessel: {vessel_data.get('vessel_name', 'Unknown')}"
-    
+            return current_data or config.DEFAULT_VESSEL, "Please enter a search term."
+
+        try:
+            vessel_data, places_summary = get_vessel_details(search_term, search_type)
+
+            # Ensure vessel_data is not empty and is a dictionary
+            if isinstance(vessel_data, list) and vessel_data:
+                vessel_data = vessel_data[0]  # Extract first vessel if it's a list
+            
+            if not isinstance(vessel_data, dict):
+                vessel_data = config.DEFAULT_VESSEL  # Fallback to default if invalid
+                places_summary = config.DEFAULT_PLACES
+                return vessel_data, "No vessel found with those search criteria."
+            
+            # Store places_summary inside vessel_data dictionary for easier data handling
+            vessel_data['places_summary'] = places_summary
+            
+            return vessel_data, f"Found vessel: {vessel_data.get('vessel_name', 'Unknown')}"
+            
+        except Exception as e:
+            print(f"Error in search: {str(e)}")
+            return current_data or config.DEFAULT_VESSEL, f"Error searching: {str(e)}"
+
     @app.callback(
         [Output('vessel-name', 'value'),
          Output('imo-number', 'value'),
@@ -311,6 +329,21 @@ def register_callbacks(app):
             vessel_data.get("main_fuel_type", "MDO"),
             vessel_data.get("aux_fuel_type", "MDO")
         )
+    @app.callback(
+        Output('places-summary-table-container', 'children'),
+        Input('vessel-data-store', 'data'),
+        prevent_initial_call=True
+    )
+    def update_places_summary_table(vessel_data):
+        if not vessel_data:
+            return [html.Div("No vessel data available")]
+        
+        # Generate the table component
+        from pages.input_module import get_places_summary_table
+        places_summary_table = get_places_summary_table(vessel_data)
+        
+        # Return the table wrapped in a list as required by Dash callbacks
+        return [places_summary_table]
     
     @app.callback(
         [Output('vessel-image', 'src'),
