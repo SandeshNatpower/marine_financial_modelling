@@ -509,7 +509,7 @@ def layout():
                                                     create_input_group(
                                                         label="Year Built",
                                                         id="year-built",
-                                                        value=DEFAULT_VESSEL["year_built"],
+                                                        value=DEFAULT_VESSEL["build"],
                                                         input_type="number",
                                                         col_size=3,
                                                         editable=True,

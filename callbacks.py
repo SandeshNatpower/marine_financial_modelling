@@ -90,9 +90,9 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
         "vessel_id": vessel_data.get("imo", 11111),
         "main_engine_power_kw": float(vessel_data.get("total_engine_power", 38400)),
         "aux_engine_power_kw": float(vessel_data.get("average_hoteling_kw", 2020)),
-        "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 50)/100),
-        "working_engine_load": float(vessel_data.get("working_engine_load", 30)/100),
-        "shore_engine_load": float(vessel_data.get("shore_engine_load", 39.5)/100),
+        "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 50))/100,
+        "working_engine_load": float(vessel_data.get("working_engine_load", 30))/100,
+        "shore_engine_load": float(vessel_data.get("shore_engine_load", 39.5))/100,
         "sailing_days": float(vessel_data.get("sailing_days", 0.1)),
         "working_days": float(vessel_data.get("working_days", 0.1)),
         "idle_days": int(vessel_data.get("idle_days", 126)),
@@ -108,7 +108,6 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
         "SHORE_POWER_MAINTENANCE_PER_DAY": float(vessel_data.get("SHORE_POWER_MAINTENANCE_PER_DAY", 480)),
         "SHORE_POWER_SPARES_PER_DAY": float(vessel_data.get("SHORE_POWER_SPARES_PER_DAY", 480)),
         "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(future_data.get("biofuels-spares-cost", 3)),
-        # Penalty parameters removed
         "PARASITIC_LOAD_ENGINE": float(future_data.get("parasitic-load", 95)/100),
         "BIOFUELS_BLEND_PERCENTAGE": float(future_data.get("biofuels-blend", 30)/100),
         "shore_enable": str(vessel_data.get("shore_enable", False)).lower(),
@@ -152,7 +151,6 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "aux_fuel_type": "MDO",
         "future_main_fuel_type": "Diesel-Bio-diesel",
         "future_aux_fuel_type": "Diesel-Bio-diesel",
-        # Penalty parameters removed
         "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 3,
         "PARASITIC_LOAD_ENGINE": 0.95,
         "BIOFUELS_BLEND_PERCENTAGE": 0.3,
@@ -161,7 +159,6 @@ def get_financial_data(input_params=None, vessel_data_override=None):
         "SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": 2,
         "SHORE_POWER_MAINTENANCE_PER_DAY": 480.0,
         "SHORE_POWER_SPARES_PER_DAY": 480.0,
-        # Penalty parameters removed
         "shore_enable": "false",
         "inflation_rate": 0.02,
         "npv_rate": 0,
@@ -206,7 +203,6 @@ def get_financial_data(input_params=None, vessel_data_override=None):
     
     qs = urlencode(final_params, doseq=True)
     url = f"{config.FINANCIAL_ENDPOINT}?{qs}"
-    print(f"Financial API URL: {url}")
     try:
         response = requests.get(url, timeout=15)
         response.raise_for_status()
@@ -303,7 +299,7 @@ def register_callbacks(app):
             vessel_data.get('imo', config.DEFAULT_VESSEL["imo"]),
             vessel_data.get('new_vessel_category', config.DEFAULT_VESSEL["vessel_category"]),
             vessel_data.get('gross_tonnage', config.DEFAULT_VESSEL["gross_tonnage"]),
-            vessel_data.get('year_built', config.DEFAULT_VESSEL["year_built"]),
+            vessel_data.get('build', config.DEFAULT_VESSEL["build"]),
             vessel_data.get('dwt', config.DEFAULT_VESSEL["dwt"])
         )
     
@@ -329,6 +325,7 @@ def register_callbacks(app):
             vessel_data.get("main_fuel_type", "MDO"),
             vessel_data.get("aux_fuel_type", "MDO")
         )
+    
     @app.callback(
         Output('places-summary-table-container', 'children'),
         Input('vessel-data-store', 'data'),
@@ -338,11 +335,8 @@ def register_callbacks(app):
         if not vessel_data:
             return [html.Div("No vessel data available")]
         
-        # Generate the table component
         from pages.input_module import get_places_summary_table
         places_summary_table = get_places_summary_table(vessel_data)
-        
-        # Return the table wrapped in a list as required by Dash callbacks
         return [places_summary_table]
     
     @app.callback(
@@ -472,7 +466,7 @@ def register_callbacks(app):
             shore_port, reporting_year, inflation_rate,
             main_engine_speed, main_engine_type,
             aux_engine_speed, aux_engine_type, vessel_data,
-            existing_future_data,currency_choice
+            existing_future_data, currency_choice
         ) = values
         
         if not all([main_power, aux_power, main_fuel_type, aux_fuel_type]):
@@ -504,7 +498,6 @@ def register_callbacks(app):
         if blend_value > 1:
             blend_value /= 100.0
         
-
         params = {
             "vessel_id": vessel_data.get("imo", 9803613),
             "main_engine_power_kw": float(main_power),
@@ -558,31 +551,55 @@ def register_callbacks(app):
             print(f"Financial API Error: {str(e)}")
             financial_data = None
         
-        # Dashboard API call uses updated_future_data (which includes scenario)
         dashboard_data = fetch_dashboard_scenarios(vessel_data or config.DEFAULT_VESSEL, updated_future_data or {})
         return financial_data, dashboard_data, "output", updated_future_data
     
+    # Callback 1: Update Scenario Filter Options and Default Value
     @app.callback(
-        [Output("cashflow-graph", "figure"),
-         Output("totex-vertical-graph", "figure"),
-         Output("totex-horizontal-graph", "figure"),
-         Output("dwelling-pie-chart", "figure"),
-         Output("scenario-filter", "options"),
+        [Output("scenario-filter", "options"),
          Output("scenario-filter", "value")],
-        Input("dashboard-scenarios-store", "data")
+        [Input("dashboard-scenarios-store", "data")]
     )
-    def update_financial_metrics(dashboard_data):
+    def update_scenario_filter(dashboard_data):
         if not dashboard_data:
-            raise no_update
-        cashflow = cashflow_figure(dashboard_data)
-        totex_vert = totex_figure(dashboard_data)
-        totex_horiz = pages.power_profiles.totex_horizontal_figure(dashboard_data)
-        dwelling = pages.power_profiles.dwelling_at_berth_pie_figure()
+            raise PreventUpdate
+
         _, scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data)
         scenario_options = [{"label": k, "value": k} for k in scenarios.keys()]
-        default_scenarios = list(scenarios.keys())[:]
-        return cashflow, totex_vert, totex_horiz, dwelling, scenario_options, default_scenarios
-    
+        default_scenarios = list(scenarios.keys())
+        return scenario_options, default_scenarios
+
+    @app.callback(
+        [Output("cashflow-graph", "figure"),
+        Output("totex-vertical-graph", "figure"),
+        Output("totex-horizontal-graph", "figure"),
+        Output("financial-pie-chart", "figure")],
+        [Input("dashboard-scenarios-store", "data"),
+        Input("scenario-filter", "value")]
+    )
+    def update_financial_metrics(dashboard_data, selected_scenarios):
+        # Use fallback synthetic data if dashboard_data is empty.
+        if not dashboard_data:
+            # Call load_totex_scenarios with None to get fallback synthetic data.
+            _, fallback_scenarios = pages.power_profiles.load_totex_scenarios(None)
+            dashboard_data = fallback_scenarios
+        # If no scenarios are selected, use all available scenarios.
+        if not selected_scenarios or not isinstance(selected_scenarios, list) or len(selected_scenarios) == 0:
+            selected_scenarios = list(dashboard_data.keys())
+            
+        # Now filter the dashboard data by the selected scenarios.
+        filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
+        
+        # Generate each figure.
+        cashflow_fig = pages.power_profiles.cashflow_figure(filtered_data)
+        totex_vert_fig = pages.power_profiles.totex_figure(filtered_data)
+        totex_horiz_fig = pages.power_profiles.totex_horizontal_figure(filtered_data)
+        financial_pie_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
+        
+        return cashflow_fig, totex_vert_fig, totex_horiz_fig, financial_pie_fig
+
+
+    # Callback 3: Update Metric Comparison Chart
     @app.callback(
         Output("metric-comparison-chart", "figure"),
         [Input("metric-dropdown", "value"),
@@ -590,10 +607,12 @@ def register_callbacks(app):
          Input("scenario-filter", "value"),
          Input("dashboard-scenarios-store", "data")]
     )
-    def update_metric_comparison(metric, year_range, scenarios, dashboard_data):
-        if not all([metric, year_range, scenarios, dashboard_data]):
-            raise no_update
-        return pages.power_profiles.generate_metric_figure(metric, year_range, scenarios, dashboard_data)
+    def update_metric_comparison(metric, year_range, selected_scenarios, dashboard_data):
+        if not all([metric, year_range, selected_scenarios, dashboard_data]):
+            raise PreventUpdate
+
+        filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
+        return pages.power_profiles.generate_metric_figure(metric, year_range, selected_scenarios, filtered_data)
     
     @app.callback(
         Output("debug-dashboard-data", "children"),
@@ -635,53 +654,46 @@ def register_callbacks(app):
     @app.callback(
         Output("dashboard-charts-container", "children"),
         [Input("dashboard-chart-selector", "value"),
-         Input("dashboard-scenarios-store", "data")]
+        Input("dashboard-scenarios-store", "data"),
+        Input("scenario-filter", "value")]
     )
-    def update_dashboard_charts(selected_charts, dashboard_data):
+    def update_dashboard_charts(selected_charts, dashboard_data, selected_scenarios):
         charts = []
-        if not dashboard_data:
-            dashboard_data = {}
-        years_data, processed_scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data) if dashboard_data else ([], {})
-        if "dwelling" in selected_charts:
-            charts.append(
-                card_component("Dwelling at Berth - Biofuel Blend Minimum",
-                               dcc.Graph(figure=pages.power_profiles.dwelling_at_berth_pie_figure(), className="chart-container"))
-            )
-        if "npv" in selected_charts:
-            fig = go.Figure()
-            for label, sc in processed_scenarios.items():
-                if "NPV" in sc and len(sc["NPV"]) == len(years_data):
-                    fig.add_trace(go.Scatter(x=years_data, y=sc["NPV"], mode="lines", name=label))
-            pages.power_profiles.set_figure_layout(fig, "NPV Comparison", "Year", "NPV (£)")
-            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-            charts.append(card_component("NPV Comparison", dcc.Graph(figure=fig, className="chart-container")))
-        if "result" in selected_charts:
-            fig = go.Figure()
-            for label, sc in processed_scenarios.items():
-                if "Result" in sc and len(sc["Result"]) == len(years_data):
-                    fig.add_trace(go.Scatter(x=years_data, y=sc["Result"], mode="lines", name=label))
-            pages.power_profiles.set_figure_layout(fig, "Result Comparison", "Year", "Result (£)")
-            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-            charts.append(card_component("Result Comparison", dcc.Graph(figure=fig, className="chart-container")))
-        if "cumulative" in selected_charts:
-            fig = go.Figure()
-            for label, sc in processed_scenarios.items():
-                if "Cumulative" in sc and len(sc["Cumulative"]) == len(years_data):
-                    fig.add_trace(go.Scatter(x=years_data, y=sc["Cumulative"], mode="lines", name=label))
-            pages.power_profiles.set_figure_layout(fig, "Cumulative Comparison", "Year", "Cumulative (£)")
-            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-            charts.append(card_component("Cumulative Comparison", dcc.Graph(figure=fig, className="chart-container")))
+        if not dashboard_data or not selected_scenarios:
+            raise dash.exceptions.PreventUpdate
+        filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
+        years_data, processed_scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data)
+
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure("TOTEX", [2025, 2050], selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+        
         if "cashflow" in selected_charts:
-            charts.append(
-                card_component("Cashflow Analysis", 
-                               dcc.Graph(figure=pages.power_profiles.cashflow_figure(dashboard_data), className="chart-container"))
-            )
+            cf_fig = pages.power_profiles.cashflow_figure(filtered_data)
+            charts.append(card_component("Cashflow Analysis", dcc.Graph(figure=cf_fig, className="chart-container")))
+        
         if "totex" in selected_charts:
-            charts.append(
-                card_component("TOTEX Comparison", 
-                               dcc.Graph(figure=pages.power_profiles.totex_figure(dashboard_data), className="chart-container"))
-            )
+            totex_fig = pages.power_profiles.totex_figure(filtered_data)
+            charts.append(card_component("TOTEX Comparison (Vertical)", dcc.Graph(figure=totex_fig, className="chart-container")))
+        
+        if "totex_horizontal" in selected_charts:
+            totex_horiz_fig = pages.power_profiles.totex_horizontal_figure(filtered_data)
+            charts.append(card_component("TOTEX Comparison (Horizontal)", dcc.Graph(figure=totex_horiz_fig, className="chart-container")))
+        
+        if "dwelling" in selected_charts:
+            dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
+            charts.append(card_component("Dwelling at Berth", dcc.Graph(figure=dwelling_fig, className="chart-container")))
+        
+        if "detail" in selected_charts:
+            detail_fig = pages.power_profiles.load_profile_figure()
+            charts.append(card_component("Detail Power Profile", dcc.Graph(figure=detail_fig, className="chart-container")))
+        
+        if "energy" in selected_charts:
+            energy_fig = pages.power_profiles.projected_energy_demand_figure()
+            charts.append(card_component("Projected Energy Demand", dcc.Graph(figure=energy_fig, className="chart-container")))
+        
         return charts
+
     
     @app.callback(
         Output("output-content", "children"),
@@ -689,11 +701,10 @@ def register_callbacks(app):
             Input("api-data-store", "data"),
             Input("future-data-store", "data"),
             Input("table-selection-dropdown", "value"),
-            Input("timeframe-toggle", "value")  # New input for day/year toggle
+            Input("timeframe-toggle", "value")
         ]
     )
     def display_emissions_output(api_data, future_data, selected_tables, timeframe):
-
         if not api_data:
             return html.Div(
                 dbc.Alert("No data available. Please calculate emissions and costs first.", color="warning"),
@@ -705,12 +716,10 @@ def register_callbacks(app):
                 className="mt-4"
             )
         
-        # Use the currency from future data if available, else default to EUR
         currency = (future_data or {}).get("currency-choice", "EUR")
         conv_factor = config.CURRENCIES.get(currency, {}).get("conversion", 1.0)
         sections = []
         
-        # Current Output Table remains the same
         if 'current' in selected_tables:
             sections.append(
                 dbc.Card(
@@ -722,7 +731,6 @@ def register_callbacks(app):
                 )
             )
         
-        # Future Output Table remains the same
         if 'future' in selected_tables:
             sections.append(
                 dbc.Card(
@@ -734,7 +742,6 @@ def register_callbacks(app):
                 )
             )
         
-        # For OPEX Comparison, choose daily or yearly based on the toggle
         if 'opex' in selected_tables:
             if timeframe == "day":
                 opex_table = get_opex_comparison_table(api_data, currency)
@@ -750,7 +757,6 @@ def register_callbacks(app):
                 )
             )
         
-        # For Emissions Comparison, choose daily or yearly based on the toggle
         if 'emissions' in selected_tables:
             if timeframe == "day":
                 emissions_table = get_emissions_comparison_table(api_data)
@@ -766,7 +772,6 @@ def register_callbacks(app):
                 )
             )
         
-        # Dashboard content (if any)
         dash_layout_content = dashboard_layout(api_data, currency)
         sections.append(
             dbc.Card(
@@ -779,5 +784,3 @@ def register_callbacks(app):
         )
         
         return html.Div(sections)
-
-

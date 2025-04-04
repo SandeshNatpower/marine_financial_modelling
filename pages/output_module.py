@@ -44,9 +44,14 @@ def safe_format_percentage(value):
 
 def style_savings(value):
     """Return a CSS class for styling based on positive/negative savings."""
-    if value is None:
+    try:
+        # Try converting to a float for comparison
+        num_val = float(value)
+    except (TypeError, ValueError):
+        # If conversion fails, return an empty class or a default
         return ""
-    return "text-danger" if value < 0 else "text-success"
+    return "text-danger" if num_val < 0 else "text-success"
+
 
 
 
@@ -931,60 +936,115 @@ def get_opex_comparison_table(api_data, currency):
 
 def get_opex_comparison_table_year(api_data, currency):
     """
-    Build a YEARLY OPEX comparison table using:
-      - Yearly values from api_data["opex_year"]
-      - Yearly savings from api_data["opex_table_year"]
-    """
-    conventional_year = (api_data.get("opex_year") or [{}])[0]
-    conv_total = conventional_year.get("total_opex_year", 0)
-
-    # For yearly savings, opex_table_year is assumed to be a dictionary
-    opex_year_data = api_data.get("opex_table_year", {})
-    savings_data = (opex_year_data.get("Savings") or [{}])
-    savings_perc_data = (opex_year_data.get("Savings_perc") or [{}])
-    savings = savings_data[0] if savings_data else {}
-    savings_perc = savings_perc_data[0] if savings_perc_data else {}
-
-    total_savings = (
-         savings.get("savings_fuel_eu_year", 0) +
-         savings.get("savings_fuel_price_year", 0) +
-         savings.get("savings_maintenance_cost_year", 0) +
-         savings.get("savings_spare_cost_year", 0) +
-         savings.get("savings_eu_ets_year", 0)
-    )
-    fut_total = conv_total - total_savings
-    total_savings_perc = (total_savings / conv_total * 100) if conv_total != 0 else 0
-
-    row = {
-        "metric": "OPEX Total",
-        "conv": conv_total,
-        "fut": fut_total,
-        "savings": total_savings,
-        "savings_perc": total_savings_perc
-    }
-
-    formatted_conv = format_number(row["conv"])
-    formatted_fut = format_number(row["fut"])
-    formatted_savings = format_number(row["savings"])
-    savings_perc_val = float(row["savings_perc"])
-    if savings_perc_val > 0:
-        formatted_perc = f"-{abs(savings_perc_val):.0f}%"
-    elif savings_perc_val < 0:
-        formatted_perc = f"+{abs(savings_perc_val):.0f}%"
-    else:
-        formatted_perc = "0%"
+    Build an OPEX per year comparison table using the available data.
     
-    table_rows = [
-        html.Tr([
+    Data used:
+      - Conventional yearly OPEX from current_table["opex_year"]
+      - Future yearly OPEX from future_output_table["opex_year"]
+      - Savings data from opex_table_year (breakdown by cost categories)
+      
+    For breakdown rows (Fuel / electricity, Maintenance, Spares / consumables, EU ETS, FuelEU),
+    the conventional and after measures columns display a dash ("–") since no breakdown values are available.
+    The OPEX Total row shows the conventional and future totals.
+    """
+    from dash import html
+    import dash_bootstrap_components as dbc
+
+    # Extract data objects (using first element from each list)
+    current = (api_data.get("current_table", {}).get("opex_year") or [{}])[0]
+    future = (api_data.get("future_output_table", {}).get("opex_year") or [{}])[0]
+    savings_obj = (api_data.get("opex_table_year", {}).get("Savings") or [{}])[0]
+    savings_perc_obj = (api_data.get("opex_table_year", {}).get("Savings_perc") or [{}])[0]
+
+    # Define rows.
+    # For breakdown rows, conventional and future values are not provided so we show a dash.
+    rows = [
+        {
+            "metric": "Fuel / electricity",
+            "conv": "–",
+            "fut": "–",
+            "savings": savings_obj.get("savings_fuel_price_year", 0),
+            "savings_perc": savings_perc_obj.get("perc_savings_fuel_price_year", 0)
+        },
+        {
+            "metric": "Maintenance",
+            "conv": "–",
+            "fut": "–",
+            "savings": savings_obj.get("savings_maintenance_cost_year", 0),
+            "savings_perc": savings_perc_obj.get("perc_savings_maintenance_cost_year", 0)
+        },
+        {
+            "metric": "Spares / consumables",
+            "conv": "–",
+            "fut": "–",
+            "savings": savings_obj.get("savings_spare_cost_year", 0),
+            "savings_perc": savings_perc_obj.get("perc_savings_spare_cost_year", 0)
+        },
+        {
+            "metric": "EU ETS",
+            "conv": "–",
+            "fut": "–",
+            "savings": savings_obj.get("savings_eu_ets_year", 0),
+            "savings_perc": savings_perc_obj.get("perc_savings_eu_ets_year", 0)
+        },
+        {
+            "metric": "FuelEU",
+            "conv": "–",
+            "fut": "–",
+            "savings": savings_obj.get("savings_fuel_eu_year", 0),
+            "savings_perc": savings_perc_obj.get("perc_savings_fuel_eu_year", 0)
+        },
+        {
+            "metric": "OPEX Total",
+            "conv": current.get("total_opex_year", 0),
+            "fut": future.get("future_total_opex_year", 0),
+            "savings": "–",
+            "savings_perc": "–"
+        }
+    ]
+
+    # Build HTML table rows.
+    table_rows = []
+    for row in rows:
+        # For conventional and future columns, if the value is numeric and non-zero, format it;
+        # otherwise, display a dash.
+        formatted_conv = (
+            format_number(row["conv"]) 
+            if isinstance(row["conv"], (int, float)) and row["conv"] != 0 
+            else row["conv"]
+        )
+        formatted_fut = (
+            format_number(row["fut"]) 
+            if isinstance(row["fut"], (int, float)) and row["fut"] != 0 
+            else row["fut"]
+        )
+        formatted_savings = (
+            format_number(row["savings"]) 
+            if isinstance(row["savings"], (int, float)) 
+            else row["savings"]
+        )
+        # Format savings percentage if numeric.
+        if isinstance(row["savings_perc"], (int, float)):
+            sp_val = float(row["savings_perc"])
+            if sp_val > 0:
+                formatted_perc = f"-{abs(sp_val):.0f}%"
+            elif sp_val < 0:
+                formatted_perc = f"+{abs(sp_val):.0f}%"
+            else:
+                formatted_perc = "0%"
+        else:
+            formatted_perc = row["savings_perc"]
+
+        table_rows.append(html.Tr([
             html.Td(row["metric"]),
             html.Td(get_currency_symbol(currency)),
             html.Td(formatted_conv),
             html.Td(formatted_fut),
             html.Td(formatted_savings, className=style_savings(row["savings"])),
             html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
-        ])
-    ]
+        ]))
 
+    # Build header row.
     header = html.Thead(html.Tr([
         html.Th("OPEX"),
         html.Th("per year"),
@@ -994,6 +1054,7 @@ def get_opex_comparison_table_year(api_data, currency):
         html.Th("Savings (%)")
     ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
 
+    # Construct the table.
     table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 

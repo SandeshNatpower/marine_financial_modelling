@@ -14,7 +14,7 @@ DEFAULT_VESSEL = {
     "vessel_name": "MSC GRANDIOSA",
     "vessel_category": "Cruise ships",
     "gross_tonnage": 181541,
-    "year_built": 2019,
+    "build": 2019,
     "cruising_speed": 21.3,  # Knots
     "dwt": 13610,  # Deadweight tonnage in metric tons
     "draught": 9.0,  # Meters

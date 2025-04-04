@@ -1,6 +1,7 @@
 import json
 import requests
 from urllib.parse import urlencode
+import random
 
 import dash
 from dash import html, dcc, Input, Output, State, no_update
@@ -8,7 +9,9 @@ import dash_bootstrap_components as dbc
 import config
 import plotly.graph_objects as go
 import numpy as np
-import pages
+import math
+from math import ceil
+from plotly.subplots import make_subplots
 import pages.input_module
 from pages.input_module import get_vessel_details, DEFAULT_VESSEL
 
@@ -53,19 +56,19 @@ def build_api_url(params, endpoint):
 ###############################################################################
 # SCENARIO DATA LOADING & FALLBACK DATA
 ###############################################################################
+
+def load_profile_figure():
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[1, 2, 3], y=[10, 20, 30], mode='lines', name='Power Profile'))
+    fig.update_layout(title='Power Profile')
+    return fig
+
 def load_totex_scenarios(dashboard_data=None):
     """
     Transform raw API dashboard_data into a tuple (years, scenarios).
 
-    The API response (e.g. keys "HFO", "LFO", "MDO") is expected to include:
-      - "year"
-      - "min_future_opex" (used as TOTEX)
-    Other economic metrics (NPV, Result, Cumulative) default to 0 if not available.
-
-    Returns:
-      years: sorted list of all distinct years.
-      scenarios: dict mapping each scenario key to a dict with:
-         "label", "years", "TOTEX", "NPV", "Result", "Cumulative"
+    Expects each key (e.g. "HFO", "LFO", "MDO") to have a list of data points,
+    each including "year" and "min_future_opex" (used as TOTEX).
     """
     scenarios = {}
     all_years = set()
@@ -149,10 +152,9 @@ def load_totex_scenarios(dashboard_data=None):
 
     return years, fallback_scenarios
 
-
 def generate_scenario_progression(initial_values, years=26):
     """
-    Generate a synthetic progression of values (for TOTEX, NPV, etc.) over 26 data points.
+    Generate a synthetic progression of values over 26 data points.
     """
     if len(initial_values) < 2:
         initial_values = initial_values + [initial_values[0]] * (2 - len(initial_values))
@@ -192,23 +194,92 @@ def generate_load_profile(peak_power, base_load_percent, hours=24):
     y = np.maximum(y, base_load)
     return x, y
 
+def projected_energy_demand_figure():
+    """
+    Create a line chart for projected energy demand.
+    Uses a default peak power of 25000 and base load of 40%.
+    """
+    x_vals, y_vals = generate_load_profile(peak_power=25000, base_load_percent=40)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines+markers", name="Projected Demand"))
+    set_figure_layout(fig, "Projected Energy Demand", "Hour", "Energy Demand (kW)")
+    return fig
+
 ###############################################################################
 # FIGURE FUNCTIONS
 ###############################################################################
-# ----- Economic / Financial Figures -----
-def dwelling_at_berth_pie_figure():
+def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
+    """
+    Generate pie charts for each scenario using dashboard data.
+    """
     labels = ["Fuel", "Financing", "Maintenance", "Spares/consumables", "EU ETS", "FuelEU"]
-    values = [63, 0, 9, 2, 1, 25]
-    fig = go.Figure([go.Pie(labels=labels, values=values, hoverinfo="label+percent", textinfo="label+percent")])
-    set_figure_layout(fig, "Dwelling at Berth - Biofuel Blend Minimum")
+
+    # Handle missing data.
+    if not selected_scenarios or len(selected_scenarios) == 0 or not dashboard_data:
+        values = [63, 0, 9, 2, 1, 25]
+        fig = go.Figure([go.Pie(labels=labels, values=values, textinfo="label+percent", hoverinfo="label+value")])
+        fig.update_layout(title="Dwelling at Berth - Biofuel Blend Minimum")
+        return fig
+
+    # Determine grid layout based on number of scenarios.
+    max_cols = 3
+    total = len(selected_scenarios)
+    cols = min(max_cols, total)
+    rows = math.ceil(total / cols)
+    specs = [[{"type": "domain"} for _ in range(cols)] for _ in range(rows)]
+    
+    # Create subplots.
+    fig = make_subplots(
+        rows=rows,
+        cols=cols,
+        subplot_titles=selected_scenarios,
+        specs=specs
+    )
+
+    # Process each selected scenario.
+    for i, scenario in enumerate(selected_scenarios):
+        row = (i // cols) + 1
+        col = (i % cols) + 1
+
+        scenario_data = dashboard_data.get(scenario, [])
+        base_data = scenario_data[0] if scenario_data else {}
+        min_opex = base_data.get("min_future_opex", 10_000_000)
+        values = [
+            min_opex * 0.60,
+            min_opex * 0.00,
+            min_opex * 0.15,
+            min_opex * 0.05,
+            min_opex * 0.05,
+            min_opex * 0.15
+        ]
+        total_value = sum(values) or 1
+        percentages = [(v / total_value) * 100 for v in values]
+
+        fig.add_trace(
+            go.Pie(
+                labels=labels,
+                values=percentages,
+                name=scenario,
+                textinfo="label+percent",
+                hoverinfo="label+value"
+            ),
+            row=row,
+            col=col
+        )
+
+    fig.update_layout(
+        title_text="Dwelling at Berth - Cost Distribution (Dummy Data)",
+        height=rows * 400,
+        showlegend=False
+    )
+    
     return fig
 
 def cashflow_figure(dashboard_data=None):
-    """Create cashflow figure from live data"""
-    years, scenarios = load_totex_scenarios(dashboard_data)
+    """Create cashflow figure from live data."""
+    years, scenarios_data = load_totex_scenarios(dashboard_data)
     fig = go.Figure()
-    
-    for label, sc in scenarios.items():
+    for label, sc in scenarios_data.items():
         fig.add_trace(go.Scatter(
             x=sc["years"], y=sc.get("Cumulative", []),
             mode='lines', name=f"{label} - Cumulative"
@@ -217,68 +288,45 @@ def cashflow_figure(dashboard_data=None):
             x=sc["years"], y=sc.get("NPV", []),
             mode='lines', name=f"{label} - NPV"
         ))
-    
     set_figure_layout(fig, "Cashflow Analysis", "Year", "Value")
     return fig
 
 def totex_figure(dashboard_data=None):
-    """Vertical bar chart for TOTEX comparison from live dashboard data.
-
-    Expects `dashboard_data` to be a dict where each key (scenario) maps to a list of records.
-    Each record should have a "min_future_opex" field (which may be null).
     """
-    if dashboard_data is None:
-        fig = go.Figure().update_layout(title="No Data Available")
-        return fig
-
+    Vertical bar chart for TOTEX comparison.
+    """
+    if not dashboard_data or not dashboard_data.keys():
+        return go.Figure().update_layout(title="No Data Available")
     labels = []
     values = []
-    # Iterate over each scenario (e.g. "MDO", "MDO_With_Shore_Power", etc.)
     for scenario, records in dashboard_data.items():
-        # Sum min_future_opex across all records, treating None as 0
         total_opex = sum(record.get("min_future_opex") or 0 for record in records)
         labels.append(scenario)
         values.append(total_opex)
-
     fig = go.Figure([go.Bar(x=labels, y=values)])
-    # Use the shared layout function (assumed defined elsewhere) to set layout
     set_figure_layout(fig, "TOTEX Comparison (Vertical)", "Scenario", "TOTEX")
     return fig
 
-
 def totex_horizontal_figure(dashboard_data=None):
-    """Horizontal bar chart from live data"""
-    _, scenarios = load_totex_scenarios(dashboard_data)
+    """Horizontal bar chart for TOTEX comparison."""
+    _, scenarios_data = load_totex_scenarios(dashboard_data)
     labels, values = [], []
-    
-    for label, sc in scenarios.items():
+    for label, sc in scenarios_data.items():
         if sc.get("TOTEX"):
             labels.append(label)
             values.append(sc["TOTEX"][-1])
-    
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=values,
-        y=labels,
-        orientation="h",
-        marker_color="#0A4B8C"
-    ))
+    fig = go.Figure(go.Bar(x=values, y=labels, orientation="h", marker_color="#0A4B8C"))
     set_figure_layout(fig, "TOTEX Comparison (Horizontal)", "TOTEX", "Scenario")
     return fig
 
 def generate_metric_figure(metric, year_range, selected_scenarios, dashboard_data=None):
     """
-    Generate a line chart for a selected economic metric (TOTEX, NPV, Result, or Cumulative)
-    over a given year range and for the chosen scenarios.
+    Generate a line chart for the selected economic metric over a given year range.
     """
-    years_list, scenarios = load_totex_scenarios(dashboard_data)
-    if not year_range or len(year_range) != 2:
-        start_year, end_year = 2025, 2050
-    else:
-        start_year, end_year = year_range
-
+    years_list, scenarios_data = load_totex_scenarios(dashboard_data)
+    start_year, end_year = (2025, 2050) if not year_range or len(year_range) != 2 else year_range
     fig = go.Figure()
-    for scenario_label, sc_data in scenarios.items():
+    for scenario_label, sc_data in scenarios_data.items():
         if selected_scenarios and scenario_label not in selected_scenarios:
             continue
         scenario_years = sc_data.get("years", [])
@@ -293,33 +341,23 @@ def generate_metric_figure(metric, year_range, selected_scenarios, dashboard_dat
     fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
     return fig
 
-# ----- Energy / Power Demand Figures -----
-def load_profile_figure(peak_power=25000, base_load_percent=40):
+###############################################################################
+# FILTERING FUNCTION
+###############################################################################
+def filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios):
     """
-    Create a line chart for the load profile.
+    Filter the dashboard_data to include only the scenarios listed in selected_scenarios.
     """
-    x_vals, y_vals = generate_load_profile(peak_power, base_load_percent)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines+markers", name="Load Profile"))
-    set_figure_layout(fig, "Daily Load Profile", "Hour", "Power (kW)")
-    return fig
-
-def projected_energy_demand_figure():
-    """
-    Create a line chart for projected energy demand.
-    """
-    x_vals, y_vals = generate_load_profile(peak_power=25000, base_load_percent=40)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines+markers", name="Projected Demand"))
-    set_figure_layout(fig, "Projected Energy Demand", "Hour", "Energy Demand (kW)")
-    return fig
+    if not dashboard_data:
+        return {}
+    return {scenario: data for scenario, data in dashboard_data.items() if scenario in selected_scenarios}
 
 ###############################################################################
 # LAYOUT FUNCTIONS
 ###############################################################################
 def financial_metrics_layout():
     """
-    Financial Metrics tab with dynamic graphs
+    Financial Metrics tab layout.
     """
     return dbc.Card(
         [
@@ -354,16 +392,6 @@ def financial_metrics_layout():
                                 value=[2025, 2050],
                                 marks={yr: str(yr) for yr in range(2025, 2051)}
                             )
-                        ], md=4, xs=12),
-                        dbc.Col([
-                            dbc.Label("Scenarios"),
-                            dcc.Dropdown(
-                                id="scenario-filter",
-                                options=[],  # Will be populated by callback
-                                multi=True,
-                                placeholder="Select scenarios",
-                                className="custom-dropdown"
-                            )
                         ], md=4, xs=12)
                     ]),
                     html.Br(),
@@ -371,9 +399,9 @@ def financial_metrics_layout():
                     html.Hr(),
                     dcc.Graph(id="totex-horizontal-graph", className="chart-container"),
                     html.Hr(),
-                    card_component("Dwelling at Berth - Biofuel Blend Minimum Static values",
-                                  dcc.Graph(id="dwelling-pie-chart", className="chart-container")),
-                                        dcc.Graph(id="cashflow-graph", className="chart-container"),
+                    dcc.Graph(id="financial-pie-chart", className="chart-container"),
+                    html.Hr(),
+                    dcc.Graph(id="cashflow-graph", className="chart-container"),
                     html.Hr(),
                     dcc.Graph(id="totex-vertical-graph", className="chart-container"),
                     html.Hr(),
@@ -383,90 +411,45 @@ def financial_metrics_layout():
         className="mb-4"
     )
 
-
-def power_demand_layout():
+def power_demand_tab_layout():
     """
-    Layout for the Power Demand Analysis tab (energy graphs only).
+    Power Demand Analysis tab layout.
     """
-    return html.Div(
+    return dbc.Card(
         [
-            html.H2("Power Demand Analysis", className='page-title'),
-            dbc.Row([
-                dbc.Col(
-                    card_component(
-                        "Load Profile Configuration",
-                        [
-                            dcc.Graph(id='detail-power-profile-chart', figure=load_profile_figure(), className="chart-container"),
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Label("Peak Power Demand (kW)"),
-                                    dbc.Input(id='detail-peak-power', type='number', value=25000, className="custom-input")
-                                ], md=4, xs=12),
-                                dbc.Col([
-                                    dbc.Label("Base Load (%)"),
-                                    dcc.Slider(
-                                        id='detail-base-load',
-                                        min=20, max=80, value=40,
-                                        marks={i: f"{i}%" for i in range(20, 81, 10)}
-                                    )
-                                ], md=8, xs=12)
-                            ])
-                        ]
-                    ),
-                    md=8, xs=12
-                ),
-                dbc.Col(
-                    card_component(
-                        "Energy Storage Options",
-                        [
-                            dcc.Dropdown(
-                                id='detail-storage-type',
-                                options=[
-                                    {'label': 'Lithium-Ion Battery', 'value': 'li-ion'},
-                                    {'label': 'Fuel Cells', 'value': 'fuel-cell'},
-                                    {'label': 'Supercapacitors', 'value': 'capacitor'}
-                                ],
-                                multi=True,
-                                placeholder="Select storage options",
-                                className="custom-dropdown"
-                            ),
-                            html.Div(id='detail-storage-results', className='mt-3')
-                        ]
-                    ),
-                    md=4, xs=12
-                )
-            ]),
-            html.Br(),
-            dbc.Row(
-                dbc.Col(
-                    card_component("Projected Energy Demand",
-                                   dcc.Graph(id='energy-demand-chart', figure=projected_energy_demand_figure(), className="chart-container")),
-                    xs=12
-                )
+            dbc.CardHeader(
+                html.H4("Power Demand Analysis", className="card-title", style=HEADER_TEXT_STYLE),
+                style=HEADER_STYLE
+            ),
+            dbc.CardBody(
+                [
+                    dcc.Graph(id="detail-power-profile-chart", className="chart-container", figure=projected_energy_demand_figure()),
+                    html.Br(),
+                    dcc.Graph(id="energy-demand-chart", className="chart-container", figure=projected_energy_demand_figure())
+                ]
             )
-        ]
+        ],
+        className="mb-4"
     )
 
 def multi_chart_dashboard_layout():
     """
-    Layout for the Dashboard tab which aggregates all graphs from both the Financial and Power Demand sections.
-    The user can select which graphs to display from a checklist, and a debug box is provided.
+    Combined Dashboard layout that aggregates graphs from both Financial Metrics and Power Demand.
+    A checklist allows users to select which charts to display.
     """
-    # Define checklist options for all available graphs.
     options = [
         {"label": "Metric Comparison", "value": "metric"},
         {"label": "Cashflow Analysis", "value": "cashflow"},
         {"label": "TOTEX (Vertical)", "value": "totex"},
         {"label": "TOTEX (Horizontal)", "value": "totex_horizontal"},
         {"label": "Dwelling at Berth", "value": "dwelling"},
-        {"label": "Load Profile", "value": "load_profile"},
+        {"label": "Detail Power Profile", "value": "detail"},
         {"label": "Projected Energy Demand", "value": "energy"}
     ]
-
     return dbc.Card(
         [
             dbc.CardHeader(
-                html.H4("Multi-Chart Dashboard", className="card-title", style=HEADER_TEXT_STYLE),
+                html.H4("Combined Dashboard", className="card-title", style=HEADER_TEXT_STYLE),
                 style=HEADER_STYLE
             ),
             dbc.CardBody(
@@ -498,18 +481,32 @@ def multi_chart_dashboard_layout():
 
 def layout():
     """
-    Top-level layout with three tabs.
-    Tab order: Dashboard, Financial Metrics, Power Demand Analysis.
+    Top-level layout that includes a global scenario filter and three tabs:
+    Financial Metrics, Combined Dashboard, and Power Demand Analysis.
     """
     return dbc.Container(
         [
+            # Global Scenario Filter
+            dbc.Row(
+                dbc.Col(
+                    dcc.Dropdown(
+                        id="scenario-filter",
+                        options=[],  # Will be populated by a callback
+                        multi=True,
+                        placeholder="Select scenarios",
+                        className="custom-dropdown"
+                    ),
+                    width=12
+                ),
+                className="mb-3"
+            ),
             dbc.Tabs(
                 [
                     dbc.Tab(financial_metrics_layout(), label="Financial Metrics"),
                     dbc.Tab(multi_chart_dashboard_layout(), label="Dashboard"),
-                    dbc.Tab(power_demand_layout(), label="Power Demand Analysis")
+                    dbc.Tab(power_demand_tab_layout(), label="Power Demand Analysis")
                 ]
-            )
+            ),
         ],
         fluid=True
     )
