@@ -87,6 +87,12 @@ def load_totex_scenarios(dashboard_data=None):
             npv_values = [pt.get("npv", 0) for pt in valid_points]
             result_values = [pt.get("result", 0) for pt in valid_points]
             cumulative_values = [pt.get("cumulative", 0) for pt in valid_points]
+            eu_ets_penalty = [pt.get("eu_ets_penalty", 0) for pt in valid_points]
+            fuel_eu_penalty = [pt.get("fuel_eu_penalty", 0) for pt in valid_points]
+            fuel_future_price = [pt.get("fuel_future_price", 0) for pt in valid_points]
+            maintenance_future = [pt.get("maintenance_future", 0) for pt in valid_points]
+            spare_future = [pt.get("spare_future", 0) for pt in valid_points]
+            
 
             scenarios[scenario_key] = {
                 "label": scenario_key,
@@ -94,7 +100,12 @@ def load_totex_scenarios(dashboard_data=None):
                 "TOTEX": totex_values,
                 "NPV": npv_values,
                 "Result": result_values,
-                "Cumulative": cumulative_values
+                "Cumulative": cumulative_values,
+                "EU ETS": eu_ets_penalty,
+                "Fuel EU": fuel_eu_penalty,
+                "Fuel Future Price": fuel_future_price,
+                "Maintenance Future": maintenance_future,
+                "Spares Future": spare_future
             }
         if scenarios:
             return sorted(all_years), scenarios
@@ -107,42 +118,74 @@ def load_totex_scenarios(dashboard_data=None):
             "TOTEX": generate_scenario_progression([10, 20]),
             "NPV": generate_scenario_progression([-142168, -124728]),
             "Result": generate_scenario_progression([-142168, -266896]),
-            "Cumulative": generate_scenario_progression([-142168, -266896])
+            "Cumulative": generate_scenario_progression([-142168, -266896]),
+            "EU ETS": generate_scenario_progression([10, 20]),
+            "Fuel EU": generate_scenario_progression([10, 20]),
+            "Fuel Future Price": generate_scenario_progression([10, 20]), 
+            "Maintenance Future": generate_scenario_progression([10, 20]),
+            "Spares Future": generate_scenario_progression([10, 20])
+            
         },
         {
             "label": "LFO",
             "TOTEX": generate_scenario_progression([10, 20]),
             "NPV": generate_scenario_progression([-3148, 36818]),
             "Result": generate_scenario_progression([-3148, 33670]),
-            "Cumulative": generate_scenario_progression([-3148, 33670])
+            "Cumulative": generate_scenario_progression([-3148, 33670]),
+            "EU ETS": generate_scenario_progression([10, 20]),
+            "Fuel EU": generate_scenario_progression([10, 20]),
+            "Fuel Future Price": generate_scenario_progression([10, 20]),
+            "Maintenance Future": generate_scenario_progression([10, 20]),
+            "Spares Future": generate_scenario_progression([10, 20])
         },
         {
             "label": "HFO",
             "TOTEX": generate_scenario_progression([10, 20]),
             "NPV": generate_scenario_progression([-1065102, -1017039]),
             "Result": generate_scenario_progression([-1065102, -2082141]),
-            "Cumulative": generate_scenario_progression([-1065102, -2082141])
+            "Cumulative": generate_scenario_progression([-1065102, -2082141]),
+            "EU ETS": generate_scenario_progression([10, 20]),
+            "Fuel EU": generate_scenario_progression([10, 20]),
+            "Fuel Future Price": generate_scenario_progression([10, 20]),
+            "Maintenance Future": generate_scenario_progression([10, 20]),
+            "Spares Future": generate_scenario_progression([10, 20])
+            
         },
         {
             "label": "MDO_With_Shore_Power",
             "TOTEX": generate_scenario_progression([6436373, 13394070]),
             "NPV": generate_scenario_progression([-4349, -4523]),
             "Result": generate_scenario_progression([-4349, -8873]),
-            "Cumulative": generate_scenario_progression([-4349, -8873])
+            "Cumulative": generate_scenario_progression([-4349, -8873]),
+            "EU ETS": generate_scenario_progression([10, 20]),
+            "Fuel EU": generate_scenario_progression([10, 20]),
+            "Fuel Future Price": generate_scenario_progression([10, 20]),
+            "Maintenance Future": generate_scenario_progression([10, 20]),
+            "Spares Future": generate_scenario_progression([10, 20])
         },
         {
             "label": "HFO_With_Shore_Power",
             "TOTEX": generate_scenario_progression([7019286, 14519473]),
             "NPV": generate_scenario_progression([-1066423, -1018473]),
             "Result": generate_scenario_progression([-1066423, -2082141]),
-            "Cumulative": generate_scenario_progression([-1066423, -2082141])
+            "Cumulative": generate_scenario_progression([-1066423, -2082141]),
+            "EU ETS": generate_scenario_progression([10, 20]),
+            "Fuel EU": generate_scenario_progression([10, 20]),
+            "Fuel Future Price": generate_scenario_progression([10, 20]),
+            "Maintenance Future": generate_scenario_progression([10, 20]),
+            "Spares Future": generate_scenario_progression([10, 20])
         },
         {
             "label": "LFO_With_Shore_Power",
             "TOTEX": generate_scenario_progression([4776659, 9942061]),
             "NPV": generate_scenario_progression([-1065102, -1017039]),
             "Result": generate_scenario_progression([-1065102, -2082141]),
-            "Cumulative": generate_scenario_progression([-1065102, -2082141])
+            "Cumulative": generate_scenario_progression([-1065102, -2082141]),
+            "EU ETS": generate_scenario_progression([10, 20]),
+            "Fuel EU": generate_scenario_progression([10, 20]),
+            "Fuel Future Price": generate_scenario_progression([10, 20]),
+            "Maintenance Future": generate_scenario_progression([10, 20]),
+            "Spares Future": generate_scenario_progression([10, 20])
         }
     ]
     fallback_scenarios = {}
@@ -211,17 +254,30 @@ def projected_energy_demand_figure():
 def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
     """
     Generate pie charts for each scenario using dashboard data.
+    For each scenario, compute average values for cost categories over all years.
+    The categories are:
+      - Fuel (from "fuel_future_price")
+      - Financing (not provided in API, so defaults to 0)
+      - Maintenance (from "maintenance_future")
+      - Spares/consumables (from "spare_future")
+      - EU ETS (from "eu_ets_penalty")
+      - FuelEU (from "fuel_eu_penalty")
+    The average for each category is computed over all records (years) available.
     """
+    import math
+    from plotly.subplots import make_subplots
+
+    # Define the labels for the pie chart
     labels = ["Fuel", "Financing", "Maintenance", "Spares/consumables", "EU ETS", "FuelEU"]
 
-    # Handle missing data.
-    if not selected_scenarios or len(selected_scenarios) == 0 or not dashboard_data:
+    # Fallback if no scenarios or dashboard data are provided.
+    if not selected_scenarios or not dashboard_data:
         values = [63, 0, 9, 2, 1, 25]
         fig = go.Figure([go.Pie(labels=labels, values=values, textinfo="label+percent", hoverinfo="label+value")])
         fig.update_layout(title="Dwelling at Berth - Biofuel Blend Minimum")
         return fig
 
-    # Determine grid layout based on number of scenarios.
+    # Determine grid layout based on number of selected scenarios.
     max_cols = 3
     total = len(selected_scenarios)
     cols = min(max_cols, total)
@@ -241,20 +297,31 @@ def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
         row = (i // cols) + 1
         col = (i % cols) + 1
 
-        scenario_data = dashboard_data.get(scenario, [])
-        base_data = scenario_data[0] if scenario_data else {}
-        min_opex = base_data.get("min_future_opex", 10_000_000)
-        values = [
-            min_opex * 0.60,
-            min_opex * 0.00,
-            min_opex * 0.15,
-            min_opex * 0.05,
-            min_opex * 0.05,
-            min_opex * 0.15
-        ]
+        records = dashboard_data.get(scenario, [])
+        if not records or not isinstance(records, list) or len(records) == 0:
+            # If no data, use default fallback values.
+            avg_fuel = 10_000_000
+            avg_financing = 0
+            avg_maintenance = 10_000_000
+            avg_spares = 10_000_000
+            avg_eu_ets = 10_000_000
+            avg_fuel_eu = 10_000_000
+        else:
+            count = len(records)
+            # Compute the average of each category over all years.
+            avg_fuel = sum(record.get("fuel_future_price", 0) for record in records) / count
+            avg_maintenance = sum(record.get("maintenance_future", 0) for record in records) / count
+            avg_spares = sum(record.get("spare_future", 0) for record in records) / count
+            avg_eu_ets = sum(record.get("eu_ets_penalty", 0) for record in records) / count
+            avg_fuel_eu = sum(record.get("fuel_eu_penalty", 0) for record in records) / count
+            avg_financing = 0  # No financing data provided; default to 0
+
+        # Create list of average values.
+        values = [avg_fuel, avg_financing, avg_maintenance, avg_spares, avg_eu_ets, avg_fuel_eu]
         total_value = sum(values) or 1
         percentages = [(v / total_value) * 100 for v in values]
 
+        # Add a pie chart trace for this scenario.
         fig.add_trace(
             go.Pie(
                 labels=labels,
@@ -268,7 +335,7 @@ def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
         )
 
     fig.update_layout(
-        title_text="Dwelling at Berth - Cost Distribution (Dummy Data)",
+        title_text="Dwelling at Berth - Cost Distribution",
         height=rows * 400,
         showlegend=False
     )
@@ -294,18 +361,33 @@ def cashflow_figure(dashboard_data=None):
 def totex_figure(dashboard_data=None):
     """
     Vertical bar chart for TOTEX comparison.
+    Expects dashboard_data as a dict mapping scenario names to lists of records,
+    where each record is a dictionary that includes the key "min_future_opex".
     """
-    if not dashboard_data or not dashboard_data.keys():
+    if not dashboard_data or not isinstance(dashboard_data, dict):
         return go.Figure().update_layout(title="No Data Available")
+    
     labels = []
     values = []
+    
     for scenario, records in dashboard_data.items():
-        total_opex = sum(record.get("min_future_opex") or 0 for record in records)
+        # Ensure records is a list
+        if not isinstance(records, list):
+            continue
+        # Sum up the "min_future_opex" values only for records that are dictionaries.
+        total_opex = 0
+        for record in records:
+            if isinstance(record, dict):
+                value = record.get("min_future_opex")
+                if value is not None:
+                    total_opex += value
         labels.append(scenario)
         values.append(total_opex)
+    
     fig = go.Figure([go.Bar(x=labels, y=values)])
     set_figure_layout(fig, "TOTEX Comparison (Vertical)", "Scenario", "TOTEX")
     return fig
+
 
 def totex_horizontal_figure(dashboard_data=None):
     """Horizontal bar chart for TOTEX comparison."""
@@ -376,7 +458,12 @@ def financial_metrics_layout():
                                     {"label": "TOTEX", "value": "TOTEX"},
                                     {"label": "Result", "value": "Result"},
                                     {"label": "Cumulative", "value": "Cumulative"},
-                                    {"label": "NPV", "value": "NPV"}
+                                    {"label": "NPV", "value": "NPV"},
+                                    {"label": "EU ETS", "value": "EU ETS"},
+                                    {"label": "Fuel EU", "value": "Fuel EU"},
+                                    {"label": "Fuel Future Price", "value": "Fuel Future Price"},
+                                    {"label": "Maintenance Future", "value": "Maintenance Future"},
+                                    {"label": "Spares Future", "value": "Spares Future"}
                                 ],
                                 value="TOTEX",
                                 clearable=False,

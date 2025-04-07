@@ -1352,7 +1352,7 @@ def penalty_cost_figure(api_data=None, currency="USD"):
     ))
     
     ylabel = f"Penalty Cost ({get_currency_symbol(currency)})"
-    set_figure_layout(fig, "Penalty Cost Comparison (2025-2050)", "Year", ylabel)
+    set_figure_layout(fig, "Fuel EU Penalty", "Year", ylabel)
     return fig
 
 
@@ -1415,7 +1415,7 @@ def totex_figure(api_data=None, currency="USD"):
     ))
     
     ylabel = f"Amount ({get_currency_symbol(currency)})"
-    set_figure_layout(fig, "Yearly TOTEX", "Year", ylabel)
+    set_figure_layout(fig, "Cashflow", "Year", ylabel)
     return fig
 
 
@@ -1490,7 +1490,7 @@ def cashflow_figure(api_data=None, currency="USD"):
     ))
     
     ylabel = f"Cash Flow ({get_currency_symbol(currency)})"
-    set_figure_layout(fig, "Yearly Cash Flow", "Year", ylabel)
+    set_figure_layout(fig, "Post-Conventional OPEX Balance", "Year", ylabel)
     return fig
 
 

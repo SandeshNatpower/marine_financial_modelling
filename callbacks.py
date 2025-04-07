@@ -667,6 +667,26 @@ def register_callbacks(app):
         if "metric" in selected_charts:
             metric_fig = pages.power_profiles.generate_metric_figure("TOTEX", [2025, 2050], selected_scenarios, filtered_data)
             charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+            
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure("EU ETS", [2025, 2050], selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+            
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure("Fuel EU", [2025, 2050], selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+        
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure("Fuel Future Price", [2025, 2050], selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+            
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure("Maintenance Future", [2025, 2050], selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+         
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure("Spares Future", [2025, 2050], selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))   
         
         if "cashflow" in selected_charts:
             cf_fig = pages.power_profiles.cashflow_figure(filtered_data)
