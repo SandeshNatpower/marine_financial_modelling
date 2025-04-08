@@ -650,7 +650,7 @@ def register_callbacks(app):
         years_data, processed_scenarios = pages.power_profiles.load_min_future_opex_scenarios(dashboard_data)
 
         if "metric" in selected_charts:
-            metric_fig = pages.power_profiles.generate_metric_figure("MIN_FUTURE_OPEX", [2025, 2050], selected_scenarios, filtered_data)
+            metric_fig = pages.power_profiles.generate_metric_figure("Future Opex", [2025, 2050], selected_scenarios, filtered_data)
             charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
             
         if "metric" in selected_charts:
@@ -675,7 +675,7 @@ def register_callbacks(app):
         
         if "min_future_opex_horizontal" in selected_charts:
             min_future_opex_horiz_fig = pages.power_profiles.min_future_opex_horizontal_figure(filtered_data)
-            charts.append(card_component("MIN_FUTURE_OPEX Comparison (Horizontal)", dcc.Graph(figure=min_future_opex_horiz_fig, className="chart-container")))
+            charts.append(card_component("Future Opex", dcc.Graph(figure=min_future_opex_horiz_fig, className="chart-container")))
         
         if "dwelling" in selected_charts:
             dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)

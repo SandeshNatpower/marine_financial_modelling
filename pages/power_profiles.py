@@ -62,7 +62,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
     Transform raw API dashboard_data into a tuple (years, scenarios).
 
     Expects each key (e.g. "HFO", "LFO", "MDO") to have a list of data points,
-    each including "year" and "min_future_opex" (used as MIN_FUTURE_OPEX).
+    each including "year" and "min_future_opex" (used as Future Opex).
     """
     scenarios = {}
     all_years = set()
@@ -88,7 +88,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
             scenarios[scenario_key] = {
                 "label": scenario_key,
                 "years": scenario_years,
-                "MIN_FUTURE_OPEX": min_future_opex_values,
+                "Future Opex": min_future_opex_values,
                 "EU ETS": eu_ets_penalty,
                 "Fuel EU": fuel_eu_penalty,
                 "Fuel Future Price": fuel_future_price,
@@ -103,7 +103,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
     scenario_list = [
         {
             "label": "MDO",
-            "MIN_FUTURE_OPEX": generate_scenario_progression([10, 20]),
+            "Future Opex": generate_scenario_progression([10, 20]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]), 
@@ -113,7 +113,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
         },
         {
             "label": "LFO",
-            "MIN_FUTURE_OPEX": generate_scenario_progression([10, 20]),
+            "Future Opex": generate_scenario_progression([10, 20]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -122,7 +122,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
         },
         {
             "label": "HFO",
-            "MIN_FUTURE_OPEX": generate_scenario_progression([10, 20]),
+            "Future Opex": generate_scenario_progression([10, 20]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -132,7 +132,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
         },
         {
             "label": "MDO_With_Shore_Power",
-            "MIN_FUTURE_OPEX": generate_scenario_progression([6436373, 13394070]),
+            "Future Opex": generate_scenario_progression([6436373, 13394070]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -141,7 +141,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
         },
         {
             "label": "HFO_With_Shore_Power",
-            "MIN_FUTURE_OPEX": generate_scenario_progression([7019286, 14519473]),
+            "Future Opex": generate_scenario_progression([7019286, 14519473]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -150,7 +150,7 @@ def load_min_future_opex_scenarios(dashboard_data=None):
         },
         {
             "label": "LFO_With_Shore_Power",
-            "MIN_FUTURE_OPEX": generate_scenario_progression([4776659, 9942061]),
+            "Future Opex": generate_scenario_progression([4776659, 9942061]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -304,15 +304,15 @@ def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
 
 
 def min_future_opex_horizontal_figure(dashboard_data=None):
-    """Horizontal bar chart for MIN_FUTURE_OPEX comparison."""
+    """Horizontal bar chart for Future Opex comparison."""
     _, scenarios_data = load_min_future_opex_scenarios(dashboard_data)
     labels, values = [], []
     for label, sc in scenarios_data.items():
-        if sc.get("MIN_FUTURE_OPEX"):
+        if sc.get("Future Opex"):
             labels.append(label)
-            values.append(sc["MIN_FUTURE_OPEX"][-1])
+            values.append(sc["Future Opex"][-1])
     fig = go.Figure(go.Bar(x=values, y=labels, orientation="h", marker_color="#0A4B8C"))
-    set_figure_layout(fig, "MIN_FUTURE_OPEX Comparison (Horizontal)", "MIN_FUTURE_OPEX", "Scenario")
+    set_figure_layout(fig, "Future Opex Comparison", "Future Opex", "Scenario")
     return fig
 
 def generate_metric_figure(metric, year_range, selected_scenarios, dashboard_data=None):
@@ -369,18 +369,18 @@ def financial_metrics_layout():
                             dcc.Dropdown(
                                 id="metric-dropdown",
                                 options=[
-                                    {"label": "MIN_FUTURE_OPEX", "value": "MIN_FUTURE_OPEX"},
+                                    {"label": "Future Opex", "value": "Future Opex"},
                                     {"label": "EU ETS", "value": "EU ETS"},
                                     {"label": "Fuel EU", "value": "Fuel EU"},
                                     {"label": "Fuel Future Price", "value": "Fuel Future Price"},
                                     {"label": "Maintenance Future", "value": "Maintenance Future"},
                                     {"label": "Spares Future", "value": "Spares Future"}
                                 ],
-                                value="MIN_FUTURE_OPEX",
+                                value="Future Opex",
                                 clearable=False,
                                 className="custom-dropdown"
                             )
-                        ], md=4, xs=12),
+                        ], md=3, xs=12),
                         dbc.Col([
                             dbc.Label("Year Range"),
                             dcc.RangeSlider(
@@ -391,7 +391,7 @@ def financial_metrics_layout():
                                 marks={yr: {"label": str(yr), "style": {"transform": "rotate(45deg)", "whiteSpace": "nowrap"}} for yr in range(2025, 2051)},
                                 tooltip={"placement": "bottom", "always_visible": True}
                             )
-                        ], md=4, xs=12),        
+                        ], md=8, xs=12),        
                     ]),
                     html.Br(),
                     dcc.Graph(id="metric-comparison-chart", className="chart-container"),
@@ -413,7 +413,7 @@ def multi_chart_dashboard_layout():
     """
     options = [
         {"label": "Metric Comparison", "value": "metric"},
-        {"label": "MIN_FUTURE_OPEX (Horizontal)", "value": "min_future_opex_horizontal"},
+        {"label": "Future Opex", "value": "min_future_opex_horizontal"},
         {"label": "Dwelling at Berth", "value": "dwelling"},
         {"label": "Detail Power Profile", "value": "detail"},
         {"label": "Projected Energy Demand", "value": "energy"}
