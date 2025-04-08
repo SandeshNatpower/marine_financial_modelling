@@ -22,7 +22,7 @@ from pages.output_module import (
     get_emissions_comparison_table_year,
     dashboard_layout,
     cashflow_figure,
-    totex_figure,
+    min_future_opex_figure,
     maintenance_cost_figure,
     penalty_cost_figure,
     spares_figure,
@@ -124,7 +124,7 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
     url = f"{config.DASHBOARD_ENDPOINT}?{qs}"
     print(f"Dashboard API URL: {url}")
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=60)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -564,15 +564,13 @@ def register_callbacks(app):
         if not dashboard_data:
             raise PreventUpdate
 
-        _, scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data)
+        _, scenarios = pages.power_profiles.load_min_future_opex_scenarios(dashboard_data)
         scenario_options = [{"label": k, "value": k} for k in scenarios.keys()]
         default_scenarios = list(scenarios.keys())
         return scenario_options, default_scenarios
 
     @app.callback(
-        [Output("cashflow-graph", "figure"),
-        Output("totex-vertical-graph", "figure"),
-        Output("totex-horizontal-graph", "figure"),
+        [Output("min_future_opex-horizontal-graph", "figure"),
         Output("financial-pie-chart", "figure")],
         [Input("dashboard-scenarios-store", "data"),
         Input("scenario-filter", "value")]
@@ -580,8 +578,8 @@ def register_callbacks(app):
     def update_financial_metrics(dashboard_data, selected_scenarios):
         # Use fallback synthetic data if dashboard_data is empty.
         if not dashboard_data:
-            # Call load_totex_scenarios with None to get fallback synthetic data.
-            _, fallback_scenarios = pages.power_profiles.load_totex_scenarios(None)
+            # Call load_min_future_opex_scenarios with None to get fallback synthetic data.
+            _, fallback_scenarios = pages.power_profiles.load_min_future_opex_scenarios(None)
             dashboard_data = fallback_scenarios
         # If no scenarios are selected, use all available scenarios.
         if not selected_scenarios or not isinstance(selected_scenarios, list) or len(selected_scenarios) == 0:
@@ -591,12 +589,10 @@ def register_callbacks(app):
         filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
         
         # Generate each figure.
-        cashflow_fig = pages.power_profiles.cashflow_figure(filtered_data)
-        totex_vert_fig = pages.power_profiles.totex_figure(filtered_data)
-        totex_horiz_fig = pages.power_profiles.totex_horizontal_figure(filtered_data)
+        min_future_opex_horiz_fig = pages.power_profiles.min_future_opex_horizontal_figure(filtered_data)
         financial_pie_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
         
-        return cashflow_fig, totex_vert_fig, totex_horiz_fig, financial_pie_fig
+        return min_future_opex_horiz_fig, financial_pie_fig
 
 
     # Callback 3: Update Metric Comparison Chart
@@ -641,17 +637,6 @@ def register_callbacks(app):
         return fig
     
     @app.callback(
-        Output('energy-demand-chart', 'figure'),
-        [Input('detail-peak-power', 'value'),
-         Input('detail-base-load', 'value')]
-    )
-    def update_energy_demand_chart(peak_power, base_load_percent):
-        if peak_power is None or base_load_percent is None:
-            return go.Figure(layout={"title": "No Data Available", "xaxis_title": "Hour", "yaxis_title": "Energy Demand (kW)"})
-        fig = pages.power_profiles.projected_energy_demand_figure()
-        return fig
-    
-    @app.callback(
         Output("dashboard-charts-container", "children"),
         [Input("dashboard-chart-selector", "value"),
         Input("dashboard-scenarios-store", "data"),
@@ -662,10 +647,10 @@ def register_callbacks(app):
         if not dashboard_data or not selected_scenarios:
             raise dash.exceptions.PreventUpdate
         filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
-        years_data, processed_scenarios = pages.power_profiles.load_totex_scenarios(dashboard_data)
+        years_data, processed_scenarios = pages.power_profiles.load_min_future_opex_scenarios(dashboard_data)
 
         if "metric" in selected_charts:
-            metric_fig = pages.power_profiles.generate_metric_figure("TOTEX", [2025, 2050], selected_scenarios, filtered_data)
+            metric_fig = pages.power_profiles.generate_metric_figure("MIN_FUTURE_OPEX", [2025, 2050], selected_scenarios, filtered_data)
             charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
             
         if "metric" in selected_charts:
@@ -688,30 +673,15 @@ def register_callbacks(app):
             metric_fig = pages.power_profiles.generate_metric_figure("Spares Future", [2025, 2050], selected_scenarios, filtered_data)
             charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))   
         
-        if "cashflow" in selected_charts:
-            cf_fig = pages.power_profiles.cashflow_figure(filtered_data)
-            charts.append(card_component("Cashflow Analysis", dcc.Graph(figure=cf_fig, className="chart-container")))
-        
-        if "totex" in selected_charts:
-            totex_fig = pages.power_profiles.totex_figure(filtered_data)
-            charts.append(card_component("TOTEX Comparison (Vertical)", dcc.Graph(figure=totex_fig, className="chart-container")))
-        
-        if "totex_horizontal" in selected_charts:
-            totex_horiz_fig = pages.power_profiles.totex_horizontal_figure(filtered_data)
-            charts.append(card_component("TOTEX Comparison (Horizontal)", dcc.Graph(figure=totex_horiz_fig, className="chart-container")))
+        if "min_future_opex_horizontal" in selected_charts:
+            min_future_opex_horiz_fig = pages.power_profiles.min_future_opex_horizontal_figure(filtered_data)
+            charts.append(card_component("MIN_FUTURE_OPEX Comparison (Horizontal)", dcc.Graph(figure=min_future_opex_horiz_fig, className="chart-container")))
         
         if "dwelling" in selected_charts:
             dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
             charts.append(card_component("Dwelling at Berth", dcc.Graph(figure=dwelling_fig, className="chart-container")))
-        
-        if "detail" in selected_charts:
-            detail_fig = pages.power_profiles.load_profile_figure()
-            charts.append(card_component("Detail Power Profile", dcc.Graph(figure=detail_fig, className="chart-container")))
-        
-        if "energy" in selected_charts:
-            energy_fig = pages.power_profiles.projected_energy_demand_figure()
-            charts.append(card_component("Projected Energy Demand", dcc.Graph(figure=energy_fig, className="chart-container")))
-        
+    
+    
         return charts
 
     

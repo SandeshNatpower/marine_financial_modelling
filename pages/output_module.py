@@ -1257,7 +1257,7 @@ def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
 # ---------------------------------------------------------------------------
 # Figure Functions Updated with Currency Symbol in Labels
 # ---------------------------------------------------------------------------
-def fuel_consumption_figure(api_data=None, currency="USD"):
+def fuel_consumption_figure(api_data=None, currency="EUR"):
     """Create a visualization for fuel consumption costs from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1290,7 +1290,7 @@ def fuel_consumption_figure(api_data=None, currency="USD"):
     return fig
 
 
-def spares_figure(api_data=None, currency="USD"):
+def spares_figure(api_data=None, currency="EUR"):
     """Create a visualization for spares/consumables costs from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1323,7 +1323,7 @@ def spares_figure(api_data=None, currency="USD"):
     return fig
 
 
-def penalty_cost_figure(api_data=None, currency="USD"):
+def penalty_cost_figure(api_data=None, currency="EUR"):
     """Create a visualization for penalty cost from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1356,7 +1356,7 @@ def penalty_cost_figure(api_data=None, currency="USD"):
     return fig
 
 
-def maintenance_cost_figure(api_data=None, currency="USD"):
+def maintenance_cost_figure(api_data=None, currency="EUR"):
     """Create a visualization for maintenance cost from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1389,8 +1389,8 @@ def maintenance_cost_figure(api_data=None, currency="USD"):
     return fig
 
 
-def totex_figure(api_data=None, currency="USD"):
-    """Create a visualization for total expenditure (TOTEX) over time."""
+def min_future_opex_figure(api_data=None, currency="EUR"):
+    """Create a visualization for total expenditure (MIN_FUTURE_OPEX) over time."""
     if not api_data or "result" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
     
@@ -1419,7 +1419,7 @@ def totex_figure(api_data=None, currency="USD"):
     return fig
 
 
-def opex_cost_figure(api_data=None, currency="USD"):
+def opex_cost_figure(api_data=None, currency="EUR"):
     """Create a visualization for OPEX cost from 2025 to 2050."""
     if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1456,7 +1456,7 @@ def opex_cost_figure(api_data=None, currency="USD"):
     return fig
 
 
-def cashflow_figure(api_data=None, currency="USD"):
+def cashflow_figure(api_data=None, currency="EUR"):
     """Create a visualization for yearly cash flow."""
     if not api_data or "result" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1494,7 +1494,7 @@ def cashflow_figure(api_data=None, currency="USD"):
     return fig
 
 
-def dwelling_at_berth_pie_figure(api_data, currency="USD"):
+def dwelling_at_berth_pie_figure(api_data, currency="EUR"):
     """Generate the current dwelling at berth pie chart."""
     if not api_data or "current_table" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1522,7 +1522,7 @@ def dwelling_at_berth_pie_figure(api_data, currency="USD"):
     return fig
 
 
-def future_dwelling_at_berth_pie_figure(api_data, currency="USD"):
+def future_dwelling_at_berth_pie_figure(api_data, currency="EUR"):
     """Generate the future dwelling at berth pie chart."""
     if not api_data or "future_output_table" not in api_data:
         return go.Figure().update_layout(title="No Data Available")
@@ -1549,8 +1549,39 @@ def future_dwelling_at_berth_pie_figure(api_data, currency="USD"):
     )
     return fig
 
+def eu_ets_cost_figure(api_data=None, currency="EUR"):
+    """Create a visualization for EU ETS costs over time."""
+    if not api_data or "current_timeseries" not in api_data or "future_timeseries" not in api_data:
+        return go.Figure().update_layout(title="No Data Available")
+    
+    current_ts = sorted(api_data["current_timeseries"], key=lambda x: x.get("year", 0))
+    future_ts = sorted(api_data["future_timeseries"], key=lambda x: x.get("year", 0))
+    years = list(range(2025, 2051))
+    
+    current_ets = {entry.get("year"): entry.get("current_eu_ets", 0) for entry in current_ts}
+    future_ets = {entry.get("year"): entry.get("future_eu_ets", 0) for entry in future_ts}
+    current_values = [current_ets.get(year, 0) for year in years]
+    future_values = [future_ets.get(year, 0) for year in years]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Current EU ETS Cost",
+        x=years,
+        y=current_values,
+        marker_color="blue"
+    ))
+    fig.add_trace(go.Bar(
+        name="Future EU ETS Cost",
+        x=years,
+        y=future_values,
+        marker_color="orange"
+    ))
+    
+    ylabel = f"Cost ({get_currency_symbol(currency)})"
+    set_figure_layout(fig, "EU ETS Cost Comparison (2025-2050)", "Year", ylabel)
+    return fig
 
-def dashboard_layout(api_data, currency="USD"):
+def dashboard_layout(api_data, currency="EUR"):
     """Create dashboard layout with multiple visualizations."""
     return dbc.Container([
         dbc.Card([
@@ -1561,7 +1592,7 @@ def dashboard_layout(api_data, currency="USD"):
             dbc.CardBody([
                 dbc.Row([
                     dbc.Col(dcc.Graph(
-                        figure=totex_figure(api_data, currency), 
+                        figure=min_future_opex_figure(api_data, currency), 
                         config={"displayModeBar": False},
                         responsive=True,
                         style={"width":"100%","height":"100%"}
@@ -1582,6 +1613,14 @@ def dashboard_layout(api_data, currency="USD"):
                         config={"displayModeBar": False},
                         responsive=True,
                         style={"width":"100%", "height":"100%"}
+                    ), md=12)
+                ], className="mb-4"),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(
+                        figure=eu_ets_cost_figure(api_data, currency), 
+                        config={"displayModeBar": False},
+                        responsive=True,
+                        style={"width":"100%","height":"100%"}
                     ), md=12)
                 ], className="mb-4"),
                 dbc.Row([

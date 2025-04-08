@@ -57,18 +57,12 @@ def build_api_url(params, endpoint):
 # SCENARIO DATA LOADING & FALLBACK DATA
 ###############################################################################
 
-def load_profile_figure():
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=[1, 2, 3], y=[10, 20, 30], mode='lines', name='Power Profile'))
-    fig.update_layout(title='Power Profile')
-    return fig
-
-def load_totex_scenarios(dashboard_data=None):
+def load_min_future_opex_scenarios(dashboard_data=None):
     """
     Transform raw API dashboard_data into a tuple (years, scenarios).
 
     Expects each key (e.g. "HFO", "LFO", "MDO") to have a list of data points,
-    each including "year" and "min_future_opex" (used as TOTEX).
+    each including "year" and "min_future_opex" (used as MIN_FUTURE_OPEX).
     """
     scenarios = {}
     all_years = set()
@@ -83,10 +77,7 @@ def load_totex_scenarios(dashboard_data=None):
                 continue
             scenario_years = [pt["year"] for pt in valid_points]
             all_years.update(scenario_years)
-            totex_values = [pt.get("min_future_opex", 0) for pt in valid_points]
-            npv_values = [pt.get("npv", 0) for pt in valid_points]
-            result_values = [pt.get("result", 0) for pt in valid_points]
-            cumulative_values = [pt.get("cumulative", 0) for pt in valid_points]
+            min_future_opex_values = [pt.get("min_future_opex", 0) for pt in valid_points]
             eu_ets_penalty = [pt.get("eu_ets_penalty", 0) for pt in valid_points]
             fuel_eu_penalty = [pt.get("fuel_eu_penalty", 0) for pt in valid_points]
             fuel_future_price = [pt.get("fuel_future_price", 0) for pt in valid_points]
@@ -97,10 +88,7 @@ def load_totex_scenarios(dashboard_data=None):
             scenarios[scenario_key] = {
                 "label": scenario_key,
                 "years": scenario_years,
-                "TOTEX": totex_values,
-                "NPV": npv_values,
-                "Result": result_values,
-                "Cumulative": cumulative_values,
+                "MIN_FUTURE_OPEX": min_future_opex_values,
                 "EU ETS": eu_ets_penalty,
                 "Fuel EU": fuel_eu_penalty,
                 "Fuel Future Price": fuel_future_price,
@@ -115,10 +103,7 @@ def load_totex_scenarios(dashboard_data=None):
     scenario_list = [
         {
             "label": "MDO",
-            "TOTEX": generate_scenario_progression([10, 20]),
-            "NPV": generate_scenario_progression([-142168, -124728]),
-            "Result": generate_scenario_progression([-142168, -266896]),
-            "Cumulative": generate_scenario_progression([-142168, -266896]),
+            "MIN_FUTURE_OPEX": generate_scenario_progression([10, 20]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]), 
@@ -128,10 +113,7 @@ def load_totex_scenarios(dashboard_data=None):
         },
         {
             "label": "LFO",
-            "TOTEX": generate_scenario_progression([10, 20]),
-            "NPV": generate_scenario_progression([-3148, 36818]),
-            "Result": generate_scenario_progression([-3148, 33670]),
-            "Cumulative": generate_scenario_progression([-3148, 33670]),
+            "MIN_FUTURE_OPEX": generate_scenario_progression([10, 20]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -140,10 +122,7 @@ def load_totex_scenarios(dashboard_data=None):
         },
         {
             "label": "HFO",
-            "TOTEX": generate_scenario_progression([10, 20]),
-            "NPV": generate_scenario_progression([-1065102, -1017039]),
-            "Result": generate_scenario_progression([-1065102, -2082141]),
-            "Cumulative": generate_scenario_progression([-1065102, -2082141]),
+            "MIN_FUTURE_OPEX": generate_scenario_progression([10, 20]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -153,10 +132,7 @@ def load_totex_scenarios(dashboard_data=None):
         },
         {
             "label": "MDO_With_Shore_Power",
-            "TOTEX": generate_scenario_progression([6436373, 13394070]),
-            "NPV": generate_scenario_progression([-4349, -4523]),
-            "Result": generate_scenario_progression([-4349, -8873]),
-            "Cumulative": generate_scenario_progression([-4349, -8873]),
+            "MIN_FUTURE_OPEX": generate_scenario_progression([6436373, 13394070]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -165,10 +141,7 @@ def load_totex_scenarios(dashboard_data=None):
         },
         {
             "label": "HFO_With_Shore_Power",
-            "TOTEX": generate_scenario_progression([7019286, 14519473]),
-            "NPV": generate_scenario_progression([-1066423, -1018473]),
-            "Result": generate_scenario_progression([-1066423, -2082141]),
-            "Cumulative": generate_scenario_progression([-1066423, -2082141]),
+            "MIN_FUTURE_OPEX": generate_scenario_progression([7019286, 14519473]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -177,10 +150,7 @@ def load_totex_scenarios(dashboard_data=None):
         },
         {
             "label": "LFO_With_Shore_Power",
-            "TOTEX": generate_scenario_progression([4776659, 9942061]),
-            "NPV": generate_scenario_progression([-1065102, -1017039]),
-            "Result": generate_scenario_progression([-1065102, -2082141]),
-            "Cumulative": generate_scenario_progression([-1065102, -2082141]),
+            "MIN_FUTURE_OPEX": generate_scenario_progression([4776659, 9942061]),
             "EU ETS": generate_scenario_progression([10, 20]),
             "Fuel EU": generate_scenario_progression([10, 20]),
             "Fuel Future Price": generate_scenario_progression([10, 20]),
@@ -237,16 +207,6 @@ def generate_load_profile(peak_power, base_load_percent, hours=24):
     y = np.maximum(y, base_load)
     return x, y
 
-def projected_energy_demand_figure():
-    """
-    Create a line chart for projected energy demand.
-    Uses a default peak power of 25000 and base load of 40%.
-    """
-    x_vals, y_vals = generate_load_profile(peak_power=25000, base_load_percent=40)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines+markers", name="Projected Demand"))
-    set_figure_layout(fig, "Projected Energy Demand", "Hour", "Energy Demand (kW)")
-    return fig
 
 ###############################################################################
 # FIGURE FUNCTIONS
@@ -342,70 +302,24 @@ def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
     
     return fig
 
-def cashflow_figure(dashboard_data=None):
-    """Create cashflow figure from live data."""
-    years, scenarios_data = load_totex_scenarios(dashboard_data)
-    fig = go.Figure()
-    for label, sc in scenarios_data.items():
-        fig.add_trace(go.Scatter(
-            x=sc["years"], y=sc.get("Cumulative", []),
-            mode='lines', name=f"{label} - Cumulative"
-        ))
-        fig.add_trace(go.Scatter(
-            x=sc["years"], y=sc.get("NPV", []),
-            mode='lines', name=f"{label} - NPV"
-        ))
-    set_figure_layout(fig, "Cashflow Analysis", "Year", "Value")
-    return fig
 
-def totex_figure(dashboard_data=None):
-    """
-    Vertical bar chart for TOTEX comparison.
-    Expects dashboard_data as a dict mapping scenario names to lists of records,
-    where each record is a dictionary that includes the key "min_future_opex".
-    """
-    if not dashboard_data or not isinstance(dashboard_data, dict):
-        return go.Figure().update_layout(title="No Data Available")
-    
-    labels = []
-    values = []
-    
-    for scenario, records in dashboard_data.items():
-        # Ensure records is a list
-        if not isinstance(records, list):
-            continue
-        # Sum up the "min_future_opex" values only for records that are dictionaries.
-        total_opex = 0
-        for record in records:
-            if isinstance(record, dict):
-                value = record.get("min_future_opex")
-                if value is not None:
-                    total_opex += value
-        labels.append(scenario)
-        values.append(total_opex)
-    
-    fig = go.Figure([go.Bar(x=labels, y=values)])
-    set_figure_layout(fig, "TOTEX Comparison (Vertical)", "Scenario", "TOTEX")
-    return fig
-
-
-def totex_horizontal_figure(dashboard_data=None):
-    """Horizontal bar chart for TOTEX comparison."""
-    _, scenarios_data = load_totex_scenarios(dashboard_data)
+def min_future_opex_horizontal_figure(dashboard_data=None):
+    """Horizontal bar chart for MIN_FUTURE_OPEX comparison."""
+    _, scenarios_data = load_min_future_opex_scenarios(dashboard_data)
     labels, values = [], []
     for label, sc in scenarios_data.items():
-        if sc.get("TOTEX"):
+        if sc.get("MIN_FUTURE_OPEX"):
             labels.append(label)
-            values.append(sc["TOTEX"][-1])
+            values.append(sc["MIN_FUTURE_OPEX"][-1])
     fig = go.Figure(go.Bar(x=values, y=labels, orientation="h", marker_color="#0A4B8C"))
-    set_figure_layout(fig, "TOTEX Comparison (Horizontal)", "TOTEX", "Scenario")
+    set_figure_layout(fig, "MIN_FUTURE_OPEX Comparison (Horizontal)", "MIN_FUTURE_OPEX", "Scenario")
     return fig
 
 def generate_metric_figure(metric, year_range, selected_scenarios, dashboard_data=None):
     """
     Generate a line chart for the selected economic metric over a given year range.
     """
-    years_list, scenarios_data = load_totex_scenarios(dashboard_data)
+    years_list, scenarios_data = load_min_future_opex_scenarios(dashboard_data)
     start_year, end_year = (2025, 2050) if not year_range or len(year_range) != 2 else year_range
     fig = go.Figure()
     for scenario_label, sc_data in scenarios_data.items():
@@ -455,17 +369,14 @@ def financial_metrics_layout():
                             dcc.Dropdown(
                                 id="metric-dropdown",
                                 options=[
-                                    {"label": "TOTEX", "value": "TOTEX"},
-                                    {"label": "Result", "value": "Result"},
-                                    {"label": "Cumulative", "value": "Cumulative"},
-                                    {"label": "NPV", "value": "NPV"},
+                                    {"label": "MIN_FUTURE_OPEX", "value": "MIN_FUTURE_OPEX"},
                                     {"label": "EU ETS", "value": "EU ETS"},
                                     {"label": "Fuel EU", "value": "Fuel EU"},
                                     {"label": "Fuel Future Price", "value": "Fuel Future Price"},
                                     {"label": "Maintenance Future", "value": "Maintenance Future"},
                                     {"label": "Spares Future", "value": "Spares Future"}
                                 ],
-                                value="TOTEX",
+                                value="MIN_FUTURE_OPEX",
                                 clearable=False,
                                 className="custom-dropdown"
                             )
@@ -484,35 +395,10 @@ def financial_metrics_layout():
                     html.Br(),
                     dcc.Graph(id="metric-comparison-chart", className="chart-container"),
                     html.Hr(),
-                    dcc.Graph(id="totex-horizontal-graph", className="chart-container"),
+                    dcc.Graph(id="min_future_opex-horizontal-graph", className="chart-container"),
                     html.Hr(),
                     dcc.Graph(id="financial-pie-chart", className="chart-container"),
                     html.Hr(),
-                    dcc.Graph(id="cashflow-graph", className="chart-container"),
-                    html.Hr(),
-                    dcc.Graph(id="totex-vertical-graph", className="chart-container"),
-                    html.Hr(),
-                ]
-            )
-        ],
-        className="mb-4"
-    )
-
-def power_demand_tab_layout():
-    """
-    Power Demand Analysis tab layout.
-    """
-    return dbc.Card(
-        [
-            dbc.CardHeader(
-                html.H4("Power Demand Analysis", className="card-title", style=HEADER_TEXT_STYLE),
-                style=HEADER_STYLE
-            ),
-            dbc.CardBody(
-                [
-                    dcc.Graph(id="detail-power-profile-chart", className="chart-container", figure=projected_energy_demand_figure()),
-                    html.Br(),
-                    dcc.Graph(id="energy-demand-chart", className="chart-container", figure=projected_energy_demand_figure())
                 ]
             )
         ],
@@ -526,9 +412,7 @@ def multi_chart_dashboard_layout():
     """
     options = [
         {"label": "Metric Comparison", "value": "metric"},
-        {"label": "Cashflow Analysis", "value": "cashflow"},
-        {"label": "TOTEX (Vertical)", "value": "totex"},
-        {"label": "TOTEX (Horizontal)", "value": "totex_horizontal"},
+        {"label": "MIN_FUTURE_OPEX (Horizontal)", "value": "min_future_opex_horizontal"},
         {"label": "Dwelling at Berth", "value": "dwelling"},
         {"label": "Detail Power Profile", "value": "detail"},
         {"label": "Projected Energy Demand", "value": "energy"}
@@ -590,8 +474,7 @@ def layout():
             dbc.Tabs(
                 [
                     dbc.Tab(financial_metrics_layout(), label="Financial Metrics"),
-                    dbc.Tab(multi_chart_dashboard_layout(), label="Dashboard"),
-                    dbc.Tab(power_demand_tab_layout(), label="Power Demand Analysis")
+                    dbc.Tab(multi_chart_dashboard_layout(), label="Dashboard")
                 ]
             ),
         ],
