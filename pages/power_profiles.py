@@ -388,9 +388,10 @@ def financial_metrics_layout():
                                 min=2025,
                                 max=2050,
                                 value=[2025, 2050],
-                                marks={yr: str(yr) for yr in range(2025, 2051)}
+                                marks={yr: {"label": str(yr), "style": {"transform": "rotate(45deg)", "whiteSpace": "nowrap"}} for yr in range(2025, 2051)},
+                                tooltip={"placement": "bottom", "always_visible": True}
                             )
-                        ], md=4, xs=12)
+                        ], md=4, xs=12),        
                     ]),
                     html.Br(),
                     dcc.Graph(id="metric-comparison-chart", className="chart-container"),
