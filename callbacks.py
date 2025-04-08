@@ -570,7 +570,7 @@ def register_callbacks(app):
         return scenario_options, default_scenarios
 
     @app.callback(
-        [Output("min_future_opex-horizontal-graph", "figure"),
+        [Output("min-future-opex", "figure"),
         Output("financial-pie-chart", "figure")],
         [Input("dashboard-scenarios-store", "data"),
         Input("scenario-filter", "value")]
@@ -589,10 +589,10 @@ def register_callbacks(app):
         filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
         
         # Generate each figure.
-        min_future_opex_horiz_fig = pages.power_profiles.min_future_opex_horizontal_figure(filtered_data)
+        min_future_opex_fig = pages.power_profiles.min_future_opex_figure(filtered_data)
         financial_pie_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
         
-        return min_future_opex_horiz_fig, financial_pie_fig
+        return min_future_opex_fig, financial_pie_fig
 
 
     # Callback 3: Update Metric Comparison Chart
@@ -673,8 +673,8 @@ def register_callbacks(app):
             metric_fig = pages.power_profiles.generate_metric_figure("Spares Future", [2025, 2050], selected_scenarios, filtered_data)
             charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))   
         
-        if "min_future_opex_horizontal" in selected_charts:
-            min_future_opex_horiz_fig = pages.power_profiles.min_future_opex_horizontal_figure(filtered_data)
+        if "min_future_opex" in selected_charts:
+            min_future_opex_horiz_fig = pages.power_profiles.min_future_opex_figure(filtered_data)
             charts.append(card_component("Future Opex", dcc.Graph(figure=min_future_opex_horiz_fig, className="chart-container")))
         
         if "dwelling" in selected_charts:

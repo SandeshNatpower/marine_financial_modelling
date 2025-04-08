@@ -58,45 +58,40 @@ def build_api_url(params, endpoint):
 ###############################################################################
 
 def load_min_future_opex_scenarios(dashboard_data=None):
-    """
-    Transform raw API dashboard_data into a tuple (years, scenarios).
-
-    Expects each key (e.g. "HFO", "LFO", "MDO") to have a list of data points,
-    each including "year" and "min_future_opex" (used as Future Opex).
-    """
-    scenarios = {}
-    all_years = set()
-
     if dashboard_data and isinstance(dashboard_data, dict):
+        scenarios = {}
+        all_years = set()
+        
         for scenario_key, data_points in dashboard_data.items():
-            if not data_points or not isinstance(data_points, list):
+            # Verify data structure for each scenario
+            if not isinstance(data_points, list):
                 continue
-            sorted_points = sorted(data_points, key=lambda pt: pt.get("year", 0))
-            valid_points = [pt for pt in sorted_points if "year" in pt]
-            if not valid_points:
+                
+            try:
+                # Sort by year and validate entries
+                sorted_points = sorted(data_points, key=lambda x: x["year"])
+                years = [p["year"] for p in sorted_points]
+                values = {
+                    "Future Opex": [p["min_future_opex"] for p in sorted_points],
+                    "EU ETS": [p["eu_ets_penalty"] for p in sorted_points],
+                    "Fuel EU": [p["fuel_eu_penalty"] for p in sorted_points],
+                    "Fuel Future Price": [p["fuel_future_price"] for p in sorted_points],
+                    "Maintenance Future": [p["maintenance_future"] for p in sorted_points],
+                    "Spares Future": [p["spare_future"] for p in sorted_points]
+                }
+                
+                scenarios[scenario_key] = {
+                    "label": scenario_key,
+                    "years": years,
+                    **values
+                }
+                all_years.update(years)
+                
+            except KeyError as e:
+                print(f"Missing key {e} in scenario {scenario_key}")
                 continue
-            scenario_years = [pt["year"] for pt in valid_points]
-            all_years.update(scenario_years)
-            min_future_opex_values = [pt.get("min_future_opex", 0) for pt in valid_points]
-            eu_ets_penalty = [pt.get("eu_ets_penalty", 0) for pt in valid_points]
-            fuel_eu_penalty = [pt.get("fuel_eu_penalty", 0) for pt in valid_points]
-            fuel_future_price = [pt.get("fuel_future_price", 0) for pt in valid_points]
-            maintenance_future = [pt.get("maintenance_future", 0) for pt in valid_points]
-            spare_future = [pt.get("spare_future", 0) for pt in valid_points]
-            
-
-            scenarios[scenario_key] = {
-                "label": scenario_key,
-                "years": scenario_years,
-                "Future Opex": min_future_opex_values,
-                "EU ETS": eu_ets_penalty,
-                "Fuel EU": fuel_eu_penalty,
-                "Fuel Future Price": fuel_future_price,
-                "Maintenance Future": maintenance_future,
-                "Spares Future": spare_future
-            }
-        if scenarios:
-            return sorted(all_years), scenarios
+                
+        return sorted(all_years), scenarios
 
     # Fallback synthetic data if no API data is available.
     years = list(range(2025, 2051))
@@ -303,17 +298,33 @@ def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
     return fig
 
 
-def min_future_opex_horizontal_figure(dashboard_data=None):
+def min_future_opex_figure(dashboard_data=None):
     """Horizontal bar chart for Future Opex comparison."""
+    # Load scenarios data using our helper.
+    # This returns a tuple: (years, scenarios_data)
     _, scenarios_data = load_min_future_opex_scenarios(dashboard_data)
+
     labels, values = [], []
-    for label, sc in scenarios_data.items():
-        if sc.get("Future Opex"):
-            labels.append(label)
-            values.append(sc["Future Opex"][-1])
-    fig = go.Figure(go.Bar(x=values, y=labels, orientation="h", marker_color="#0A4B8C"))
+    for scenario_label, scenario_info in scenarios_data.items():
+        # Retrieve the list of future opex values from the key "Future Opex"
+        future_opex_list = scenario_info.get("Future Opex", [])
+        # Ensure that we have a list and it is not empty.
+        if future_opex_list and isinstance(future_opex_list, list):
+            # Use the last value in the list (assumed to be the latest year)
+            labels.append(scenario_label)
+            values.append(future_opex_list[-1])
+    
+    # Create a horizontal bar chart.
+    fig = go.Figure(go.Bar(
+        x=values,
+        y=labels,
+        orientation="h",
+        marker_color="#0A4B8C"
+    ))
     set_figure_layout(fig, "Future Opex Comparison", "Future Opex", "Scenario")
     return fig
+
+
 
 def generate_metric_figure(metric, year_range, selected_scenarios, dashboard_data=None):
     """
@@ -396,7 +407,7 @@ def financial_metrics_layout():
                     html.Br(),
                     dcc.Graph(id="metric-comparison-chart", className="chart-container"),
                     html.Hr(),
-                    dcc.Graph(id="min_future_opex-horizontal-graph", className="chart-container"),
+                    dcc.Graph(id="min-future-opex", className="chart-container"),
                     html.Hr(),
                     dcc.Graph(id="financial-pie-chart", className="chart-container"),
                     html.Hr(),
@@ -413,7 +424,7 @@ def multi_chart_dashboard_layout():
     """
     options = [
         {"label": "Metric Comparison", "value": "metric"},
-        {"label": "Future Opex", "value": "min_future_opex_horizontal"},
+        {"label": "Future Opex", "value": "min_future_opex"},
         {"label": "Dwelling at Berth", "value": "dwelling"},
         {"label": "Detail Power Profile", "value": "detail"},
         {"label": "Projected Energy Demand", "value": "energy"}
