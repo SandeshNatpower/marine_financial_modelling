@@ -66,8 +66,9 @@ def get_current_output_table(api_data, currency):
     working_days_data = (current.get("working_days") or [{}])[0]
     sailing_days = working_days_data.get("sailing_days", 175)      # sample: 175
     working_days = working_days_data.get("working_days", 165)      # sample: 165
-    idle_days    = working_days_data.get("working_days", 75)
+    idle_days    = working_days_data.get("current_idle_days", 75)
     shore_days   = 0   # override to sample value
+    
 
     # ----- Engine / Power -----
     eng_data = (current.get("enginge_power") or [{}])[0]
