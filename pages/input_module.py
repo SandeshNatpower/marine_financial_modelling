@@ -190,20 +190,18 @@ def get_vessel_image_path(vessel_type):
 
 
 def get_places_summary_table(vessel_data):
-    
     import pandas as pd
     from dash import html, dash_table
     """
     Generate a Dash HTML layout showing:
-      - A title header and summary
-      - A summary statistics section
+      - A title header
       - A DataTable with columns for Port Name, Energy (MWh), % of Total, Idle Days, Working Days, and MWh/Working Day.
     
     Args:
         vessel_data (dict or list): The vessel data that contains 'places_summary' or is a list of place dicts.
 
     Returns:
-        html.Div: A Dash HTML layout containing the summary text and a DataTable.
+        html.Div: A Dash HTML layout containing the table.
     """
 
     # 1. Extract or assume the list of places
@@ -220,7 +218,6 @@ def get_places_summary_table(vessel_data):
     # If empty, return a "no data" layout
     if df.empty:
         return html.Div([
-            html.H3("Port Energy Consumption Dashboard"),
             html.P("No port data available.")
         ])
 
@@ -232,14 +229,9 @@ def get_places_summary_table(vessel_data):
     for col in numeric_cols:
         df[col] = df[col].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
     
-    # Calculate total energy and number of ports
+    # Calculate total energy for later percentage computation
     total_energy = df['total_ci_mwh'].sum()
-    num_ports = len(df)
     
-    # Calculate how many ports have idle days or working days data
-    ports_with_idle = df['idle_days'].notnull().sum()
-    ports_with_working = df['working_days'].notnull().sum()
-
     # Create new columns for display:
     #   % of Total, MWh/Working Day
     df['percent_of_total'] = df['total_ci_mwh'] / total_energy * 100
@@ -254,7 +246,7 @@ def get_places_summary_table(vessel_data):
     df['mwh_per_working_day'] = df['mwh_per_working_day'].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
 
     # 3. Reorder and rename columns for a friendlier display
-    df_display = df[[
+    df_display = df[[ 
         'port_name',         # 1
         'total_ci_mwh',      # 2
         'percent_of_total',  # 3
@@ -321,29 +313,13 @@ def get_places_summary_table(vessel_data):
         ]
     )
 
-    # 5. Build summary text
-    total_energy_text = f"Total MWh: {round(total_energy, 2):,}"
-    num_ports_text = f"Number of Ports: {num_ports}"
-    ports_with_working_text = f"Ports with Working Days Data: {ports_with_working}"
-    ports_with_idle_text = f"Ports with Idle Days Data: {ports_with_idle}"
-
-    # 6. Construct the layout with title, summary, and table
+    # 5. Construct the layout with title and table (summary statistics removed)
     layout = html.Div([
-        html.H3("Port Energy Consumption Dashboard"),
-        html.H5(f"Total Energy: {round(total_energy, 2):,} MWh across {num_ports} ports"),
-        html.Div([
-            html.H6("Summary Statistics"),
-            html.Ul([
-                html.Li(total_energy_text),
-                html.Li(num_ports_text),
-                html.Li(ports_with_working_text),
-                html.Li(ports_with_idle_text),
-            ], style={"listStyleType": "none", "paddingLeft": "0px"})
-        ], style={"marginBottom": "20px"}),
         data_table
     ], style={"margin": "20px"})
     
     return layout
+
 
 
 
