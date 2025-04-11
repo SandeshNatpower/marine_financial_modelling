@@ -876,19 +876,6 @@ def register_callbacks(app):
         except Exception as e:
             return f"Error formatting dashboard data: {e}"
     
-    @app.callback(
-        Output("detail-power-profile-chart", "figure"),
-        [Input("detail-peak-power", "value"),
-        Input("detail-base-load", "value")]
-    )
-    def update_power_profile_chart(peak_power, base_load):
-        if not peak_power or not base_load:
-            peak_power = 25000
-            base_load = 40
-        x, y = pages.power_profiles.generate_load_profile(peak_power, base_load)
-        fig = go.Figure(data=go.Scatter(x=x, y=y, mode='lines', name="Load Profile"))
-        pages.power_profiles.set_figure_layout(fig, "Daily Load Profile", "Hour", "Power (kW)")
-        return fig
     
     @app.callback(
         Output("dashboard-charts-container", "children"),
