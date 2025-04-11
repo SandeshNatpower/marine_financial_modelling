@@ -876,6 +876,7 @@ def register_callbacks(app):
         except Exception as e:
             return f"Error formatting dashboard data: {e}"
     
+
     
     @app.callback(
         Output("dashboard-charts-container", "children"),
