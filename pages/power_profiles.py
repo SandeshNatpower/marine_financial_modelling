@@ -1,4 +1,5 @@
 import json
+import altair 
 from altair import value
 import requests
 from urllib.parse import urlencode
