@@ -864,88 +864,88 @@ def register_callbacks(app):
         return fig
 
     
-        @app.callback(
-            Output("debug-dashboard-data", "children"),
+    @app.callback(
+        Output("debug-dashboard-data", "children"),
+        Input("dashboard-scenarios-store", "data")
+    )
+    def debug_dashboard_data(dashboard_data):
+        if dashboard_data is None:
+            return "No dashboard data available."
+        try:
+            return json.dumps(dashboard_data, indent=2)
+        except Exception as e:
+            return f"Error formatting dashboard data: {e}"
+    
+    @app.callback(
+        Output("detail-power-profile-chart", "figure"),
+        [Input("detail-peak-power", "value"),
+        Input("detail-base-load", "value")]
+    )
+    def update_power_profile_chart(peak_power, base_load):
+        if not peak_power or not base_load:
+            peak_power = 25000
+            base_load = 40
+        x, y = pages.power_profiles.generate_load_profile(peak_power, base_load)
+        fig = go.Figure(data=go.Scatter(x=x, y=y, mode='lines', name="Load Profile"))
+        pages.power_profiles.set_figure_layout(fig, "Daily Load Profile", "Hour", "Power (kW)")
+        return fig
+    
+    @app.callback(
+        Output("dashboard-charts-container", "children"),
+        [
+            Input("dashboard-chart-selector", "value"),
+            Input("dashboard-metric-dropdown", "value"),
+            Input("dashboard-year-range-slider", "value"),
+            Input("dashboard-view-selector", "value"),
             Input("dashboard-scenarios-store", "data")
-        )
-        def debug_dashboard_data(dashboard_data):
-            if dashboard_data is None:
-                return "No dashboard data available."
-            try:
-                return json.dumps(dashboard_data, indent=2)
-            except Exception as e:
-                return f"Error formatting dashboard data: {e}"
+        ]
+    )
+    def update_dashboard_charts(selected_charts, selected_metric, year_range, data_view, dashboard_data):
+        """
+        Update the charts shown in the dashboard based on user selections.
+        """
+        if not dashboard_data:
+            return html.Div("No data available. Please calculate scenarios first.", className="text-center text-danger")
         
-        @app.callback(
-            Output("detail-power-profile-chart", "figure"),
-            [Input("detail-peak-power", "value"),
-            Input("detail-base-load", "value")]
-        )
-        def update_power_profile_chart(peak_power, base_load):
-            if not peak_power or not base_load:
-                peak_power = 25000
-                base_load = 40
-            x, y = pages.power_profiles.generate_load_profile(peak_power, base_load)
-            fig = go.Figure(data=go.Scatter(x=x, y=y, mode='lines', name="Load Profile"))
-            pages.power_profiles.set_figure_layout(fig, "Daily Load Profile", "Hour", "Power (kW)")
-            return fig
+        charts = []
+        selected_scenarios = list(dashboard_data.keys())
         
-        @app.callback(
-            Output("dashboard-charts-container", "children"),
-            [
-                Input("dashboard-chart-selector", "value"),
-                Input("dashboard-metric-dropdown", "value"),
-                Input("dashboard-year-range-slider", "value"),
-                Input("dashboard-view-selector", "value"),
-                Input("dashboard-scenarios-store", "data")
-            ]
-        )
-        def update_dashboard_charts(selected_charts, selected_metric, year_range, data_view, dashboard_data):
-            """
-            Update the charts shown in the dashboard based on user selections.
-            """
-            if not dashboard_data:
-                return html.Div("No data available. Please calculate scenarios first.", className="text-center text-danger")
-            
-            charts = []
-            selected_scenarios = list(dashboard_data.keys())
-            
-            # Metric Comparison Chart
-            if "metric" in selected_charts:
-                metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios, dashboard_data)
-                charts.append(
-                    html.Div([
-                        dcc.Graph(id="dashboard-metric-comparison", figure=metric_fig, className="chart-container"),
-                        html.Hr()
-                    ])
-                )
-            
-            # Min Future OPEX Chart
-            if "min_future_opex" in selected_charts:
-                opex_fig = min_future_opex_figure(dashboard_data)
-                charts.append(
-                    html.Div([
-                        dcc.Graph(id="dashboard-min-future-opex", figure=opex_fig, className="chart-container"),
-                        html.Hr()
-                    ])
-                )
-            
-            # Dwelling at Berth Chart
-            if "dwelling" in selected_charts:
-                dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios)
-                charts.append(
-                    html.Div([
-                        dcc.Graph(id="dashboard-dwelling-chart", figure=dwelling_fig, className="chart-container"),
-                        html.Hr()
-                    ])
-                )
-            
-            if not charts:
-                return html.Div("Please select at least one chart to display.", className="text-warning")
-            
-            # Remove trailing horizontal rule for the final chart
-            charts_container = charts[:-1] + [html.Div([charts[-1].children[0]])]
-            return html.Div(charts_container)
+        # Metric Comparison Chart
+        if "metric" in selected_charts:
+            metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios, dashboard_data)
+            charts.append(
+                html.Div([
+                    dcc.Graph(id="dashboard-metric-comparison", figure=metric_fig, className="chart-container"),
+                    html.Hr()
+                ])
+            )
+        
+        # Min Future OPEX Chart
+        if "min_future_opex" in selected_charts:
+            opex_fig = min_future_opex_figure(dashboard_data)
+            charts.append(
+                html.Div([
+                    dcc.Graph(id="dashboard-min-future-opex", figure=opex_fig, className="chart-container"),
+                    html.Hr()
+                ])
+            )
+        
+        # Dwelling at Berth Chart
+        if "dwelling" in selected_charts:
+            dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios)
+            charts.append(
+                html.Div([
+                    dcc.Graph(id="dashboard-dwelling-chart", figure=dwelling_fig, className="chart-container"),
+                    html.Hr()
+                ])
+            )
+        
+        if not charts:
+            return html.Div("Please select at least one chart to display.", className="text-warning")
+        
+        # Remove trailing horizontal rule for the final chart
+        charts_container = charts[:-1] + [html.Div([charts[-1].children[0]])]
+        return html.Div(charts_container)
 
     @app.callback(
         [
