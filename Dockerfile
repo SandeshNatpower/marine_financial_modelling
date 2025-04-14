@@ -1,5 +1,5 @@
-# Use a stable Python version
-FROM python:3.10-slim
+# Use a stable Python version with minimal vulnerabilities
+FROM python:3.10-alpinene
 
 # Set the working directory inside the container
 WORKDIR /app

@@ -1,5 +1,5 @@
 import json
-import dash_table
+from dash import dash_table
 import requests
 from urllib.parse import urlencode
 
@@ -414,25 +414,25 @@ def register_callbacks(app):
         Output('dashboard-scenarios-store', 'data'),
         Input('calculate-scenarios-btn', 'n_clicks'),
         [
-            State('scenario-filter', 'value'),
+            State('scenario-filter-global', 'value'),         # User-selected scenario list
             State('vessel-data-store', 'data'),
             State('future-data-store', 'data')
         ],
         prevent_initial_call=True
     )
-    def calculate_scenarios(n_clicks, selected_fuels, vessel_data, future_data):
+    def calculate_scenarios(n_clicks, selected_scenarios, vessel_data, future_data):
         if not n_clicks:
-            raise dash.exceptions.PreventUpdate
+            raise PreventUpdate
 
-        # Join the selected fuel types into a comma-separated string.
-        # E.g. ["MDO", "LNG Diesel", "LPG"] becomes "MDO,LNG Diesel,LPG"
-        scenario_str = ",".join(selected_fuels or [])
 
-        # Merge vessel and future data with defaults.
+
+        # Use the selected scenarios from the dropdown
+        scenario_list = selected_scenarios or []
+        
+        # Process vessel and future data (make sure merge_vessel_data is defined)
         vessel_data = merge_vessel_data(vessel_data)
         future_data = future_data or {}
-        
-        # Extract vessel parameters.
+
         main_power = vessel_data.get("total_engine_power", 38400)
         aux_power = vessel_data.get("average_hoteling_kw", 2020)
         main_fuel_type = vessel_data.get("main_fuel_type", "MDO")
@@ -442,8 +442,6 @@ def register_callbacks(app):
         idle_days = vessel_data.get("idle_days", 126)
         shore_days = vessel_data.get("shore_days", 0)
         sailing_engine_load = vessel_data.get("sailing_engine_load", 50)
-        working_engine_load = vessel_data.get("working_engine_load", 30)
-        shore_engine_load = vessel_data.get("shore_engine_load", 39.5)
         engine_maint_cost = vessel_data.get("ENGINE_MAINTENANCE_COSTS_PER_HOUR", 20)
         spares_cost = vessel_data.get("SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR", 2)
         shore_enable = vessel_data.get("shore_enable", False)
@@ -454,8 +452,7 @@ def register_callbacks(app):
         main_engine_type = vessel_data.get("MAIN_ENGINE_TYPE", "4-STROKE")
         aux_engine_speed = vessel_data.get("AUX_ENGINE_SPEED", "MEDIUM")
         aux_engine_type = vessel_data.get("AUX_ENGINE_TYPE", "4-STROKE")
-        
-        # Extract future parameters.
+
         biofuels_spares_cost = future_data.get("biofuels-spares-cost", 3)
         parasitic_load = future_data.get("parasitic-load", 95)
         biofuels_blend = future_data.get("biofuels-blend", 30)
@@ -464,27 +461,24 @@ def register_callbacks(app):
         inflation_rate = future_data.get("inflation-rate", 2)
         npv_rate = future_data.get("npv-rate", 0)
         currency_choice = future_data.get("currency-choice", "EUR")
-        
+
         shore_enable_bool = str(shore_enable).strip().lower() in ["yes", "true"]
         price_conversion = config.CURRENCIES.get(currency_choice, {}).get("conversion", 1)
-        
+
         try:
             blend_value = float(biofuels_blend)
-            if blend_value > 100:
-                blend_value = 30
-            if blend_value > 1:
-                blend_value /= 100.0
         except (ValueError, TypeError):
-            blend_value = 0.3
-        
+            raise ValueError("Invalid biofuels blend percentage provided.")
+        if blend_value > 1:
+            blend_value /= 100.0
+
+        # Build the parameters for the API call.
+        # Notice that we pass the user-selected scenarios as a list.
         params = {
             "vessel_id": vessel_data.get("imo", 11111),
             "main_engine_power_kw": float(main_power),
             "aux_engine_power_kw": float(aux_power),
             "sailing_engine_load": float(sailing_engine_load) / 100,
-            "working_engine_load": float(working_engine_load) / 100,
-            "shore_engine_load": float(shore_engine_load) / 100,
-            "sailing_days": float(sailing_days),
             "working_days": float(working_days),
             "idle_days": int(idle_days),
             "shore_days": int(shore_days),
@@ -498,99 +492,69 @@ def register_callbacks(app):
             "SHORE_POWER_MAINTENANCE_PER_DAY": float(shore_maint_cost),
             "SHORE_POWER_SPARES_PER_DAY": float(shore_spares_cost),
             "BIOFUELS_SPARES_CONSUMABLES_COSTS_PER_ENGINE_HOUR": float(biofuels_spares_cost),
-            "PARASITIC_LOAD_ENGINE": float(parasitic_load) / 100,
+            "PARASITIC_LOAD_ENGINE": float(parasitic_load) / 100 if parasitic_load else 0.95,
             "shore_enable": str(shore_enable_bool).lower(),
-            "inflation_rate": float(inflation_rate) / 100,
-            "npv_rate": float(npv_rate) / 100,
+            "inflation_rate": float(inflation_rate) / 100 if inflation_rate else 0.02,
+            "npv_rate": float(npv_rate) / 100.0,
             "CAPEX": float(capex),
             "MAIN_ENGINE_SPEED": main_engine_speed,
             "MAIN_ENGINE_TYPE": main_engine_type,
             "AUX_ENGINE_SPEED": aux_engine_speed,
             "AUX_ENGINE_TYPE": aux_engine_type,
             "price_conversion": price_conversion,
-            # Use the comma-separated fuel string for the parameter.
-            "scenario_future_aux_fuel": scenario_str
+            "scenario_future_aux_fuel": ",".join(scenario_list) if scenario_list else "Diesel-Bio-diesel",
         }
-        
-        # Build the full URL for debugging.
-        url = build_api_url(params, config.DASHBOARD_ENDPOINT)
-        print(f"Final API URL: {url}")
-        
+
+        qs = urlencode(params, doseq=True)
+        url = f"{config.DASHBOARD_ENDPOINT}?{qs}"
+        print(f"Final Financial API URL: {url}")
         try:
             response = requests.get(config.DASHBOARD_ENDPOINT, params=params, timeout=60)
             response.raise_for_status()
-            scenarios_data = response.json()
+            scenarios_data_response = response.json()
             print("Dashboard Scenarios API Call Successful")
-            
-            processed_data = {}
-            for scenario_key, scenario_value in scenarios_data.items():
-                # If the value is already a list (as expected), store it directly.
-                if isinstance(scenario_value, list):
-                    processed_data[scenario_key] = scenario_value
-                else:
-                    # Optionally, if needed, further processing can be applied here.
-                    processed_data[scenario_key] = scenario_value
-
-            return processed_data
+            # This API response is assumed to contain only the selected scenarios.
+            return scenarios_data_response
         except Exception as e:
             print(f"Scenario API Error: {str(e)}")
-            return no_update
-
+            return dash.no_update
 
     
     @app.callback(
         [Output("scenario-filter", "options"),
-        Output("scenario-filter", "value")],
-        [Input("dashboard-scenarios-store", "data")]  # You can also use a dummy input to trigger at startup
+         Output("scenario-filter", "value")],
+        [Input("dashboard-scenarios-store", "data")]
     )
-    def update_scenario_filter(_dashboard_data):
-        """
-        Populate the scenario-filter dropdown with the full list of fuel options from config.FUEL_OPTIONS.
-        """
-        # Access the static fuel options defined in the configuration.
-        fuel_options = config.FUEL_OPTIONS
-        
-        default_selection = []  # or a list of fuels if you want some pre-selected
-        return fuel_options, default_selection
+    def update_scenario_filter(dashboard_data):
+        if not dashboard_data:
+            return [], []
+        scenarios = list(dashboard_data.keys())
+        options = [{"label": sc, "value": sc} for sc in scenarios]
+        default_value = scenarios[:2] if len(scenarios) >= 2 else scenarios
+        return options, default_value
         
     @app.callback(
-        [dash.Output("dashboard-scenario-dropdown", "options"),
-        dash.Output("dashboard-scenario-dropdown", "value")],
-        [dash.Input("dashboard-scenarios-store", "data"),
-        dash.Input("scenario-filter", "value")]
+        [Output("dashboard-scenario-dropdown", "options"),
+         Output("dashboard-scenario-dropdown", "value")],
+        [Input("dashboard-scenarios-store", "data"),
+         Input("scenario-filter", "value")]
     )
     def update_dashboard_scenario_dropdown(dashboard_data, selected_scenarios):
-        """
-        Update the dashboard scenario dropdown based on either:
-        1. The calculated scenarios in the dashboard-scenarios-store
-        2. The selected scenarios in the global scenario filter
-        """
-        # If no trigger is found, do not update.
         if not callback_context.triggered:
             raise PreventUpdate
-            
         triggered_id = callback_context.triggered[0]['prop_id'].split('.')[0]
-        
-        # If triggered by the store
         if triggered_id == "dashboard-scenarios-store":
             if not dashboard_data:
                 raise PreventUpdate
-                
-            # Create options from the stored data's keys
             scenario_options = [{"label": k, "value": k} for k in dashboard_data.keys()]
             default_value = scenario_options[0]["value"] if scenario_options else None
             return scenario_options, default_value
-            
-        # If triggered by the global scenario filter
         elif triggered_id == "scenario-filter":
             if not selected_scenarios or len(selected_scenarios) == 0:
                 raise PreventUpdate
-                
             scenario_options = [{"label": scenario, "value": scenario} for scenario in selected_scenarios]
             default_value = selected_scenarios[0] if selected_scenarios else None
             return scenario_options, default_value
-            
-        # Fallback
         raise PreventUpdate
 
     
@@ -756,112 +720,92 @@ def register_callbacks(app):
     @app.callback(
         [Output("min-future-opex", "figure"),
         Output("financial-pie-chart", "figure")],
-        [Input("dashboard-scenarios-store", "data"),
-        Input("scenario-filter", "value")]
+        [
+            Input("dashboard-scenarios-store", "data"),
+            Input("scenario-filter", "value"),             # <<--- scenario filter
+        ]
     )
     def update_financial_metrics(dashboard_data, selected_scenarios):
-        # Use fallback synthetic data if dashboard_data is empty.
-        if not dashboard_data:
-            # Call load_min_future_opex_scenarios with None to get fallback synthetic data.
-            _, fallback_scenarios = pages.power_profiles.load_min_future_opex_scenarios(None)
-            dashboard_data = fallback_scenarios
-        # If no scenarios are selected, use all available scenarios.
-        if not selected_scenarios or not isinstance(selected_scenarios, list) or len(selected_scenarios) == 0:
-            selected_scenarios = list(dashboard_data.keys())
-            
-        # Now filter the dashboard data by the selected scenarios.
-        filtered_data = pages.power_profiles.filter_dashboard_data_by_scenarios(dashboard_data, selected_scenarios)
-        
-        # Generate each figure.
+        if not dashboard_data or not selected_scenarios:
+            no_data_fig = go.Figure().update_layout(title="No scenarios selected")
+            return no_data_fig, no_data_fig
+
+        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
         min_future_opex_fig = pages.power_profiles.min_future_opex_figure(filtered_data)
         financial_pie_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
-        
         return min_future_opex_fig, financial_pie_fig
 
 
+    @app.callback(
+        Output("total-expenditure", "figure"),
+        [
+            Input("year-range-slider", "value"),
+            Input("scenario-filter", "value"),            # <<--- scenario filter
+            Input("dashboard-scenarios-store", "data"),
+            Input("data-view-selector", "value")
+        ]
+    )
+    def update_total_expenditure(year_range, selected_scenarios, dashboard_data, data_view):
+        if not dashboard_data or not selected_scenarios:
+            return go.Figure().update_layout(title="No scenarios selected")
 
-    # Callback 3: Update Metric Comparison Chart
+        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
+        total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(filtered_data, year_range, view=data_view)
+        return total_exp_fig
+
+
+    @app.callback(
+        Output("single-year-breakdown", "figure"),
+        [
+            Input("single-year-dropdown", "value"),
+            Input("dashboard-scenarios-store", "data"),
+            Input("scenario-filter", "value")             # <<--- scenario filter
+        ]
+    )
+    def update_single_year_breakdown(single_year, dashboard_data, selected_scenarios):
+        # If no data or no scenarios selected, show an empty figure.
+        if not dashboard_data or not selected_scenarios:
+            return go.Figure().update_layout(title="No scenarios selected")
+
+        # Filter the data to include only the selected scenarios.
+        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
+
+        if single_year == "all":
+            return go.Figure().update_layout(title="Single-Year Breakdown: No single year selected")
+        
+        # Convert user input to an integer year
+        try:
+            chosen_year = int(single_year)
+        except ValueError:
+            return go.Figure().update_layout(title="Invalid year selected")
+
+        fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
+        return fig
+
+
     @app.callback(
         Output("metric-comparison-chart", "figure"),
         [
             Input("metric-dropdown", "value"),
             Input("year-range-slider", "value"),
-            Input("scenario-filter", "value"),
+            Input("scenario-filter", "value"),           
             Input("dashboard-scenarios-store", "data"),
             Input("data-view-selector", "value")
         ]
     )
     def update_metric_comparison(metric, year_range, selected_scenarios, dashboard_data, data_view):
-        if not dashboard_data:
-            _, fallback_data = pages.power_profiles.load_min_future_opex_scenarios(None)
-            dashboard_data = fallback_data
-            
-        if not selected_scenarios or not isinstance(selected_scenarios, list) or len(selected_scenarios) == 0:
-            selected_scenarios = list(dashboard_data.keys())
-            
-        if metric is None or year_range is None:
-            return go.Figure().update_layout(title="No data to display")
+        # 1) If there is no data or no selected scenarios, show a "no data" figure
+        if not dashboard_data or not selected_scenarios:
+            return go.Figure().update_layout(title="No scenarios selected")
 
-        # Create figure
-        fig = go.Figure()
-        
-        # Loop through filtered scenarios
-        for scenario in selected_scenarios:
-            if scenario not in dashboard_data:
-                continue
-                
-            records = dashboard_data[scenario]
-            
-            # Filter by year range
-            filtered_records = [r for r in records if r.get("year") and year_range[0] <= r["year"] <= year_range[1]]
-            
-            if not filtered_records:
-                continue
-                
-            # Sort by year
-            filtered_records.sort(key=lambda r: r.get("year", 0))
-            
-            years = [r.get("year") for r in filtered_records]
-            
-            # Add future trace if selected
-            if data_view in ["future", "both"]:
-                future_values = [r.get("future", {}).get(metric.lower(), 0) for r in filtered_records]
-                fig.add_trace(go.Scatter(
-                    x=years,
-                    y=future_values,
-                    mode="lines+markers",
-                    name=f"{scenario} (Future)",
-                    line=dict(width=3),
-                    marker=dict(size=8)
-                ))
-            
-            # Add current trace if selected
-            if data_view in ["current", "both"]:
-                current_values = [r.get("current", {}).get(metric.lower(), 0) for r in filtered_records]
-                fig.add_trace(go.Scatter(
-                    x=years,
-                    y=current_values,
-                    mode="lines+markers",
-                    name=f"{scenario} (Current)",
-                    line=dict(dash="dash", width=2),
-                    marker=dict(size=6)
-                ))
-        
-        # Set layout
-        currency_sym = config.CURRENCIES.get("EUR", {}).get("symbol", "€")
-        pages.power_profiles.set_figure_layout(
-            fig, 
-            f"{metric} Comparison ({data_view.capitalize()} View)",
-            "Year", 
-            f"{metric} ({currency_sym})"
-        )
-        
-        # Improve legend
-        fig.update_layout(
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
-        )
-        
+        # 2) Filter the data so that only keys that match the user’s scenario selections are included
+        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
+
+        # 3) Generate the figure using only the filtered data
+        fig = pages.power_profiles.generate_metric_figure(metric, year_range, selected_scenarios, filtered_data, data_view)
         return fig
+
+
 
     
     @app.callback(
@@ -880,60 +824,70 @@ def register_callbacks(app):
     
     @app.callback(
         Output("dashboard-charts-container", "children"),
-        [
-            Input("dashboard-chart-selector", "value"),
-            Input("dashboard-metric-dropdown", "value"),
-            Input("dashboard-year-range-slider", "value"),
-            Input("dashboard-view-selector", "value"),
-            Input("dashboard-scenarios-store", "data")
-        ]
+        [Input("dashboard-chart-selector", "value"),
+        Input("dashboard-metric-dropdown", "value"),
+        Input("dashboard-year-range-slider", "value"),
+        Input("dashboard-view-selector", "value"),
+        Input("dashboard-scenarios-store", "data"),
+        Input("single-year-dropdown", "value"),
+        Input("scenario-filter", "value")]  # This input was missing from the function params
     )
-    def update_dashboard_charts(selected_charts, selected_metric, year_range, data_view, dashboard_data):
-        """
-        Update the charts shown in the dashboard based on user selections.
-        """
+    def update_dashboard_charts(selected_charts, selected_metric, year_range, data_view, 
+                            dashboard_data, single_year, selected_scenarios):
         if not dashboard_data:
             return html.Div("No data available. Please calculate scenarios first.", className="text-center text-danger")
         
+        if not selected_scenarios:
+            return html.Div("No scenarios selected. Please select scenarios to display.", className="text-warning")
+        
         charts = []
-        selected_scenarios = list(dashboard_data.keys())
+        # Use the filtered data based on user-selected scenarios
+        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
         
         # Metric Comparison Chart
         if "metric" in selected_charts:
-            metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios, dashboard_data)
+            metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, 
+                                                                    selected_scenarios, filtered_data, data_view)
             charts.append(
-                html.Div([
-                    dcc.Graph(id="dashboard-metric-comparison", figure=metric_fig, className="chart-container"),
-                    html.Hr()
-                ])
+                card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container"))
             )
         
         # Min Future OPEX Chart
         if "min_future_opex" in selected_charts:
-            opex_fig = min_future_opex_figure(dashboard_data)
+            opex_fig = pages.power_profiles.min_future_opex_figure(filtered_data, year_range=tuple(year_range))
             charts.append(
-                html.Div([
-                    dcc.Graph(id="dashboard-min-future-opex", figure=opex_fig, className="chart-container"),
-                    html.Hr()
-                ])
+                card_component("Future Opex", dcc.Graph(figure=opex_fig, className="chart-container"))
             )
         
-        # Dwelling at Berth Chart
+        # Dwelling at Berth Pie Chart
         if "dwelling" in selected_charts:
-            dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios)
+            dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
             charts.append(
-                html.Div([
-                    dcc.Graph(id="dashboard-dwelling-chart", figure=dwelling_fig, className="chart-container"),
-                    html.Hr()
-                ])
+                card_component("Dwelling at Berth", dcc.Graph(figure=dwelling_fig, className="chart-container"))
+            )
+        
+        # Total Expenditure Comparison Chart
+        if "total_expenditure" in selected_charts:
+            total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(filtered_data, year_range, view=data_view)
+            charts.append(
+                card_component("Total Expenditure Comparison", dcc.Graph(figure=total_exp_fig, className="chart-container"))
+            )
+        
+        # Single-Year Breakdown Chart - keeping default behavior for the year selection
+        if "single_year" in selected_charts:
+            if single_year == "all":
+                single_year_fig = go.Figure().update_layout(title="No single year selected")
+            else:
+                chosen_year = int(single_year)
+                single_year_fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
+            charts.append(
+                card_component("Single Year Breakdown", dcc.Graph(figure=single_year_fig, className="chart-container"))
             )
         
         if not charts:
             return html.Div("Please select at least one chart to display.", className="text-warning")
         
-        # Remove trailing horizontal rule for the final chart
-        charts_container = charts[:-1] + [html.Div([charts[-1].children[0]])]
-        return html.Div(charts_container)
+        return html.Div(charts)
 
     @app.callback(
         [
@@ -1126,14 +1080,6 @@ def register_callbacks(app):
             future_data  = cost_breakdown_entry["future"]
             cb_year = cost_breakdown_entry["year"]
             cost_breakdown_fig = go.Figure()
-            # Add OPEX along with other components for the current data
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Current"],
-                x=[current_data["opex"]],
-                name='OPEX',
-                orientation='h',
-                marker=dict(color='#8c564b')
-            ))
             cost_breakdown_fig.add_trace(go.Bar(
                 y=["Current"],
                 x=[current_data["fuel_price"]],
@@ -1162,15 +1108,7 @@ def register_callbacks(app):
                 orientation='h',
                 marker=dict(color='#D62728')
             ))
-            # Future data: add OPEX as well
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Future"],
-                x=[future_data["opex"]],
-                name='OPEX',
-                orientation='h',
-                marker=dict(color='#8c564b'),
-                showlegend=False
-            ))
+            # Future data:
             cost_breakdown_fig.add_trace(go.Bar(
                 y=["Future"],
                 x=[future_data["fuel_price"]],
@@ -1208,13 +1146,6 @@ def register_callbacks(app):
             cb_year = cost_breakdown_entry["year"]
             recent_data = cost_breakdown_entry[view_type]
             cost_breakdown_fig = go.Figure()
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=[f"{view_type.capitalize()} ({cb_year})"],
-                x=[recent_data["opex"]],
-                name='OPEX',
-                orientation='h',
-                marker=dict(color='#8c564b')
-            ))
             cost_breakdown_fig.add_trace(go.Bar(
                 y=[f"{view_type.capitalize()} ({cb_year})"],
                 x=[recent_data["fuel_price"]],
