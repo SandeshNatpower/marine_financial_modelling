@@ -949,26 +949,6 @@ def multi_chart_dashboard_layout():
     ], className="mb-4")
 
 
-def emission_comparison_layout():
-    """
-    Layout for the Emission Comparison tab with various filters and graphs.
-    Note: This is a placeholder and can be expanded as needed.
-    """
-    return dbc.Card(
-        [
-            dbc.CardHeader(
-                html.H4("Emission Comparison", className="card-title", style=HEADER_TEXT_STYLE),
-                style=HEADER_STYLE
-            ),
-            dbc.CardBody(
-                [
-                    html.P("This section will contain emission comparison charts."),
-                    # Placeholder for future content
-                ]
-            )
-        ],
-        className="mb-4"
-    )
 
 # ----------------------------
 # Main App Layout
@@ -1008,8 +988,7 @@ def layout():
             dbc.Tabs(
                 [
                     dbc.Tab(financial_metrics_layout(), label="Financial Metrics"),
-                    dbc.Tab(multi_chart_dashboard_layout(), label="Financial Dashboard"),
-                    dbc.Tab(emission_comparison_layout(), label="Emission Metrics")
+                    dbc.Tab(multi_chart_dashboard_layout(), label="Financial Dashboard")
                 ]
             ),
             

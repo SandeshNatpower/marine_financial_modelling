@@ -21,6 +21,8 @@ from pages.output_module import (
     get_opex_comparison_table_year,
     get_emissions_comparison_table,
     get_emissions_comparison_table_year,
+    get_carbon_footprint_table,
+    get_vessel_summary_table,
     dashboard_layout,
     cashflow_figure,
     min_future_opex_figure,
@@ -1332,6 +1334,19 @@ def register_callbacks(app):
         conv_factor = config.CURRENCIES.get(currency, {}).get("conversion", 1.0)
         sections = []
         
+        
+        
+        if 'vessel_summary' in selected_tables:
+            sections.append(
+                dbc.Card(
+                    [
+                        dbc.CardHeader(html.H4("Vessel Summary")),
+                        dbc.CardBody(get_vessel_summary_table(api_data, currency))
+                    ],
+                    className="mb-4"    
+          
+                )
+            )
         if 'current' in selected_tables:
             sections.append(
                 dbc.Card(
@@ -1383,6 +1398,18 @@ def register_callbacks(app):
                     className="mb-4"
                 )
             )
+
+        if 'carbon_footprint' in selected_tables:
+            sections.append(
+                dbc.Card(
+                    [
+                        dbc.CardHeader(html.H4("Carbon Footprint Scope 1, 2, and 3")),
+                        dbc.CardBody(get_carbon_footprint_table(api_data))
+                    ],
+                    className="mb-4"
+                )
+            )       
+        
         
         dash_layout_content = dashboard_layout(api_data, currency)
         sections.append(

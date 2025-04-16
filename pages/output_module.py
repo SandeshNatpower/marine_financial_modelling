@@ -934,97 +934,77 @@ def get_opex_comparison_table(api_data, currency):
     table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
-
 def get_opex_comparison_table_year(api_data, currency):
-    """
-    Build an OPEX per year comparison table using the available data.
-    
-    Data used:
-      - Conventional yearly OPEX from current_table["opex_year"]
-      - Future yearly OPEX from future_output_table["opex_year"]
-      - Savings data from opex_table_year (breakdown by cost categories)
-      
-    For breakdown rows (Fuel / electricity, Maintenance, Spares / consumables, EU ETS, FuelEU),
-    the conventional and after measures columns display a dash ("–") since no breakdown values are available.
-    The OPEX Total row shows the conventional and future totals.
-    """
-    from dash import html
-    import dash_bootstrap_components as dbc
+    # --- Data extraction ---
+    # Use a dash string for missing breakdown values.
+    dash_val = "–"
 
-    # Extract data objects (using first element from each list)
-    current = (api_data.get("current_table", {}).get("opex_year") or [{}])[0]
-    future = (api_data.get("future_output_table", {}).get("opex_year") or [{}])[0]
-    savings_obj = (api_data.get("opex_table_year", {}).get("Savings") or [{}])[0]
-    savings_perc_obj = (api_data.get("opex_table_year", {}).get("Savings_perc") or [{}])[0]
+    # Extract conventional yearly OPEX values.
+    current_opex = (api_data.get("current_table", {}).get("opex_year") or [{}])[0]
+    # Extract future yearly OPEX values.
+    future_opex = (api_data.get("future_output_table", {}).get("opex_year") or [{}])[0]
 
-    # Define rows.
-    # For breakdown rows, conventional and future values are not provided so we show a dash.
+    # Extract savings breakdown values from the yearly table.
+    # (If the "opex_table_year" object does not exist, default to zero values.)
+    opex_year_table = api_data.get("opex_table_year", {})
+    savings_obj = (opex_year_table.get("Savings") or [{}])[0]
+    savings_perc_obj = (opex_year_table.get("Savings_perc") or [{}])[0]
+
+    # --- Build the rows ---
+    # For breakdown rows, use dash for conventional and future values.
     rows = [
         {
             "metric": "Fuel / electricity",
-            "conv": "–",
-            "fut": "–",
+            "conv": dash_val,
+            "fut": dash_val,
             "savings": savings_obj.get("savings_fuel_price_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_fuel_price_year", 0)
         },
         {
             "metric": "Maintenance",
-            "conv": "–",
-            "fut": "–",
+            "conv": dash_val,
+            "fut": dash_val,
             "savings": savings_obj.get("savings_maintenance_cost_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_maintenance_cost_year", 0)
         },
         {
             "metric": "Spares / consumables",
-            "conv": "–",
-            "fut": "–",
+            "conv": dash_val,
+            "fut": dash_val,
             "savings": savings_obj.get("savings_spare_cost_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_spare_cost_year", 0)
         },
         {
             "metric": "EU ETS",
-            "conv": "–",
-            "fut": "–",
+            "conv": dash_val,
+            "fut": dash_val,
             "savings": savings_obj.get("savings_eu_ets_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_eu_ets_year", 0)
         },
         {
             "metric": "FuelEU",
-            "conv": "–",
-            "fut": "–",
+            "conv": dash_val,
+            "fut": dash_val,
             "savings": savings_obj.get("savings_fuel_eu_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_fuel_eu_year", 0)
         },
         {
             "metric": "OPEX Total",
-            "conv": current.get("total_opex_year", 0),
-            "fut": future.get("future_total_opex_year", 0),
-            "savings": "–",
-            "savings_perc": "–"
+            "conv": current_opex.get("total_opex_year", 0),
+            "fut": future_opex.get("future_total_opex_year", 0),
+            "savings": savings_obj.get("savings_total_opex_year", 0),
+            "savings_perc": savings_perc_obj.get("perc_savings_total_opex_year", 0)
         }
     ]
 
-    # Build HTML table rows.
+    # --- Build table rows ---
     table_rows = []
     for row in rows:
-        # For conventional and future columns, if the value is numeric and non-zero, format it;
-        # otherwise, display a dash.
-        formatted_conv = (
-            format_number(row["conv"]) 
-            if isinstance(row["conv"], (int, float)) and row["conv"] != 0 
-            else row["conv"]
-        )
-        formatted_fut = (
-            format_number(row["fut"]) 
-            if isinstance(row["fut"], (int, float)) and row["fut"] != 0 
-            else row["fut"]
-        )
-        formatted_savings = (
-            format_number(row["savings"]) 
-            if isinstance(row["savings"], (int, float)) 
-            else row["savings"]
-        )
-        # Format savings percentage if numeric.
+        formatted_conv = format_number(row["conv"]) if isinstance(row["conv"], (int, float)) else row["conv"]
+        formatted_fut = format_number(row["fut"]) if isinstance(row["fut"], (int, float)) else row["fut"]
+        formatted_savings = format_number(row["savings"]) if isinstance(row["savings"], (int, float)) else row["savings"]
+
+        # Format the savings percentage with a sign.
         if isinstance(row["savings_perc"], (int, float)):
             sp_val = float(row["savings_perc"])
             if sp_val > 0:
@@ -1036,28 +1016,32 @@ def get_opex_comparison_table_year(api_data, currency):
         else:
             formatted_perc = row["savings_perc"]
 
-        table_rows.append(html.Tr([
-            html.Td(row["metric"]),
-            html.Td(get_currency_symbol(currency)),
-            html.Td(formatted_conv),
-            html.Td(formatted_fut),
-            html.Td(formatted_savings, className=style_savings(row["savings"])),
-            html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
-        ]))
+        table_rows.append(
+            html.Tr([
+                html.Td(row["metric"]),
+                html.Td(get_currency_symbol(currency)),
+                html.Td(formatted_conv),
+                html.Td(formatted_fut),
+                html.Td(formatted_savings, className=style_savings(row["savings"])),
+                html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
+            ])
+        )
 
-    # Build header row.
-    header = html.Thead(html.Tr([
-        html.Th("OPEX"),
-        html.Th("per year"),
-        html.Th(f"Conventional ({get_currency_symbol(currency)}/year)"),
-        html.Th(f"After measures ({get_currency_symbol(currency)}/year)"),
-        html.Th(f"Savings ({get_currency_symbol(currency)}/year)"),
-        html.Th("Savings (%)")
-    ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
+    header = html.Thead(
+        html.Tr([
+            html.Th("OPEX"),
+            html.Th("per year"),
+            html.Th(f"Conventional ({get_currency_symbol(currency)}/year)"),
+            html.Th(f"After measures ({get_currency_symbol(currency)}/year)"),
+            html.Th(f"Savings ({get_currency_symbol(currency)}/year)"),
+            html.Th("Savings (%)")
+        ]),
+        style={"backgroundColor": "#0A4B8C", "color": "white"}
+    )
 
-    # Construct the table.
     table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
+
 
 
 # ---------------------------------------------------------------------------
@@ -1239,6 +1223,207 @@ def get_emissions_comparison_table_year(api_data):
     table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
     return html.Div(table, className="table-responsive")
 
+def get_carbon_footprint_table(api_data):
+
+    # Grab the carbon_footprint_table from the API data
+    carbon_footprint = api_data.get("current_table", {})
+
+    # Extract data for each scope. 
+    scope_1_data = (carbon_footprint.get("scope_1_co2") or [{}])[0]
+    scope_2_data = (carbon_footprint.get("scope_2_co2") or [{}])[0]
+    scope_3_data = (carbon_footprint.get("scope_3_co2") or [{}])[0]
+
+
+    rows = [
+        {
+            "metric": "Scope 1 - Direct (Tank to Wake) - MT",
+            "sailing": scope_1_data.get("sailing_co2_emission_ttw_year", 0),
+            "working": scope_1_data.get("working_co2_emission_ttw_year", 0),
+            "idle": scope_1_data.get("idle_co2_emission_ttw_year", 0),
+        },
+        {
+            "metric": "Scope 2 - Indirect (Well to Tank) - MT",
+            "sailing": scope_2_data.get("sailing_scope_2_co2_emission_ttw_year", 0),
+            "working": scope_2_data.get("working_scope_2_co2_emission_ttw_year", 0),
+            "idle": scope_2_data.get("idle_scope_2_co2_emission_ttw_year", 0),
+        },
+        {
+            "metric": "Scope 3 - Upstream (Well to Well) - MT",
+            "sailing": scope_3_data.get("sailing_scope_3_co2_emission_ttw_year", 0),
+            "working": scope_3_data.get("working_scope_3_co2_emission_ttw_year", 0),
+            "idle": scope_3_data.get("idle_scope_3_co2_emission_ttw_year", 0),
+        },
+    ]
+
+    # Build the table rows
+    table_rows = []
+    for row in rows:
+        sailing_val = format_number(row["sailing"] or 0)
+        working_val = format_number(row["working"] or 0)
+        idle_val    = format_number(row["idle"]    or 0)
+
+        table_rows.append(
+            html.Tr([
+                html.Td(row["metric"]), 
+                html.Td(sailing_val),
+                html.Td(working_val),
+                html.Td(idle_val),
+            ])
+        )
+
+    # Create a styled header (similar to your emissions table style)
+    header = html.Thead(
+        html.Tr([
+            html.Th("Carbon Footprint"),
+            html.Th("Sailing"),
+            html.Th("Working"),
+            html.Th("Idle"),
+        ]),
+        style={"backgroundColor": "#0A4B8C", "color": "white"}
+    )
+
+    # Wrap everything in a Dash Bootstrap Table for a nice style
+    table = dbc.Table(
+        [header, html.Tbody(table_rows)],
+        bordered=True, 
+        striped=True,
+        hover=True
+    )
+
+    # Return a responsive container holding the table
+    return html.Div(table, className="table-responsive")
+
+
+def get_vessel_summary_table(api_data, currency):
+    # --- Extract Engine Power from current_table ---
+    
+    energy_table = api_data.get("current_table", {})
+    
+    # Engine Power (from energy_table)
+
+    engine_power_data = energy_table.get("enginge_power", [{}])[0]  # JSON object containing engine power info
+    engine_power_sailing = engine_power_data.get("sailing_power", 0)
+    engine_power_working = engine_power_data.get("working_power", 0)
+    engine_power_idle    = engine_power_data.get("idle_power", 0)
+    engine_power_avg = engine_power_data.get("avg_power_req_day")
+
+    # Energy Requirements (from energy_table)
+    energy_req_kwh_day = energy_table.get("power_calc_day", [{}])[0]
+    energy_req_kwh_day_sailing = energy_req_kwh_day.get("sailing_energy_req_kwh_day", 0)
+    energy_req_kwh_day_working = energy_req_kwh_day.get("working_energy_req_kwh_day", 0)
+    energy_req_kwh_day_idle    = energy_req_kwh_day.get("idle_energy_req_kwh_day", 0)
+    energy_req_kwh_day_avg = energy_req_kwh_day.get("power_req_day", 0)
+    
+
+    energy_req_mwh_year = energy_table.get("power_calc_year", [{}])[0]
+    energy_req_mwh_year_sailing = energy_req_mwh_year.get("sailing_energy_req_mwh_year", 0)
+    energy_req_mwh_year_working = energy_req_mwh_year.get("working_energy_req_mwh_year", 0)
+    energy_req_mwh_year_idle    = energy_req_mwh_year.get("idle_energy_req_mwh_year", 0)
+    energy_req_mwh_year_avg = energy_req_mwh_year.get("power_req_year", 0)
+
+    # Fuel Consumption (kiloliters per year)
+    fuel_consumption_kiloliters_year = energy_table.get("fuel_consumption_kiloliters_year", [{}])[0]
+    fuel_consumption_kl_sailing = fuel_consumption_kiloliters_year.get("sailing_fuel_consumption_kiloliter_year", 0)
+    fuel_consumption_kl_working = fuel_consumption_kiloliters_year.get("working_fuel_consumption_kiloliter_year", 0)
+    fuel_consumption_kl_idle    = fuel_consumption_kiloliters_year.get("idle_fuel_consumption_kiloliter_year", 0)
+    fuel_consumption_kiloliter_day_year = fuel_consumption_kiloliters_year.get("avg_fuel_consumption_kiloliter_day_year", 0)
+
+    # Fuel Price (Euro per year)
+    fuel_price_year = energy_table.get("fuel_price_year", [{}])[0]
+    fuel_price_year_euro_sailing = fuel_price_year.get("sailing_fuel_price_year", 0)
+    fuel_price_year_euro_working = fuel_price_year.get("working_fuel_price_year", 0)
+    fuel_price_year_euro_idle    = fuel_price_year.get("idle_fuel_price_year", 0)
+    fuel_price_year = fuel_price_year.get("fuel_price_year", 0)
+
+    # Current EU ETS Year
+    ets_penalty = energy_table.get("ets_penalty", [{}])[0]
+    current_eu_ets_year = ets_penalty.get("current_eu_ets_year", 0)
+    current_eu_ets_sailing = ets_penalty.get("current_sailing_eu_ets_year", 0)
+    current_eu_ets_working = ets_penalty.get("current_working_eu_ets_year", 0)
+    current_eu_ets_idle    = ets_penalty.get("current_idle_eu_ets_year", 0)
+
+    # --- Build the rows for the table with an extra "unit" field ---
+    rows = [
+        {
+            "metric": "Engine Power",
+            "unit": "KW",
+            "sailing": engine_power_sailing,
+            "working": engine_power_working,
+            "idle": engine_power_idle,
+        },
+        {
+            "metric": "Energy Req Day",
+            "unit": "KWh",
+            "sailing": energy_req_kwh_day_sailing,
+            "working": energy_req_kwh_day_working,
+            "idle": energy_req_kwh_day_idle,
+        },
+        {
+            "metric": "Energy Req Year",
+            "unit": "MWh",
+            "sailing": energy_req_mwh_year_sailing,
+            "working": energy_req_mwh_year_working,
+            "idle": energy_req_mwh_year_idle,
+        },
+        {
+            "metric": "Fuel Consumption Year",
+            "unit": "KiloLiters",
+            "sailing": fuel_consumption_kl_sailing,
+            "working": fuel_consumption_kl_working,
+            "idle": fuel_consumption_kl_idle,
+        },
+        {
+            "metric": "Fuel Price Year",
+            "unit": get_currency_symbol(currency),
+            "sailing": fuel_price_year_euro_sailing,
+            "working": fuel_price_year_euro_working,
+            "idle": fuel_price_year_euro_idle,
+        },
+        {
+            "metric": "Current EU ETS Penalty Year",
+            "unit": get_currency_symbol(currency),  # Unit can be added if applicable
+            "sailing": current_eu_ets_sailing,
+            "working": current_eu_ets_working,
+            "idle": current_eu_ets_idle,
+        }
+    ]
+
+    # --- Build the Dash table rows ---
+    table_rows = []
+    for row in rows:
+        table_rows.append(
+            html.Tr([
+                html.Td(row["metric"]),
+                html.Td(row["unit"]),
+                html.Td(format_number(row["sailing"])),
+                html.Td(format_number(row["working"])),
+                html.Td(format_number(row["idle"])),
+            ])
+        )
+
+    # --- Build the table header with an extra column for Unit ---
+    header = html.Thead(
+        html.Tr([
+            html.Th("Operation Profile"),
+            html.Th("Unit"),
+            html.Th("Propulsion"),
+            html.Th("Parked/Mooring"),
+            html.Th("Cold Ironing"),
+        ]),
+        style={"backgroundColor": "#0A4B8C", "color": "white"}
+    )
+
+    # --- Wrap the header and rows in a Bootstrap Table ---
+    table = dbc.Table(
+        [header, html.Tbody(table_rows)],
+        bordered=True,
+        striped=True,
+        hover=True
+    )
+
+    # --- Return the table in a responsive container ---
+    return html.Div(table, className="table-responsive")
+
 def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     """Centralized layout configuration with fixed sizing to avoid compression."""
     fig.update_layout(
@@ -1254,6 +1439,7 @@ def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
         hovermode="x unified"
     )
     return fig
+
 
 # ---------------------------------------------------------------------------
 # Figure Functions Updated with Currency Symbol in Labels
@@ -1680,10 +1866,12 @@ def layout():
                 dcc.Checklist(
                     id='table-selection-dropdown',
                     options=[
+                        {"label": "Vessel Summary", "value": "vessel_summary"},
                         {"label": "Current Output", "value": "current"},
                         {"label": "Future Output", "value": "future"},
                         {"label": "OPEX Comparison", "value": "opex"},
-                        {"label": "Emissions Comparison", "value": "emissions"}
+                        {"label": "Emissions Comparison", "value": "emissions"},
+                        {"label": "Carbon Footprint", "value": "carbon_footprint"}
                     ],
                     value=['opex', 'emissions'],
                     labelStyle={"display": "inline-block", "marginRight": "10px"},
