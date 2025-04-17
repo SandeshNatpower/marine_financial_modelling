@@ -259,20 +259,21 @@ def create_range_stacked_bar(dashboard_data, year_range=(2025, 2050)):
     For the given year_range, build a horizontal stacked‐bar of all cost components
     aggregated across that range, for each scenario.
     Hover shows Scenario, Component, and Value.
+    Components are stacked from largest to smallest.
     """
     components = {
         "Fuel":        "fuel_price",
         "Maintenance": "maintenance",
         "Penalty":     "penalty",
         "Spare":       "spare",
-        "EU ETS":      "eu_ets",
+        "EU ETS":      "eu_ets",
     }
     colors = {
         "Fuel":        "#EF553B",
         "Maintenance": "#00CC96",
         "Penalty":     "#FFA15A",
         "Spare":       "#19D3F3",
-        "EU ETS":      "#FF6692",
+        "EU ETS":      "#FF6692",
     }
 
     start, end = year_range
@@ -295,9 +296,17 @@ def create_range_stacked_bar(dashboard_data, year_range=(2025, 2050)):
             title=f"No data between {start} and {end}"
         )
 
-    scenarios = list(aggregated)
+    scenarios = sorted(aggregated.keys(), key=lambda sc: sum(aggregated[sc].values()), reverse=True)
+    
+    # Calculate component totals across all scenarios
+    component_totals = {comp: sum(aggregated[s][comp] for s in scenarios) for comp in components}
+    
+    # Sort components by total size (largest first)
+    sorted_components = sorted(components.keys(), key=lambda c: component_totals[c], reverse=True)
+    
     fig = go.Figure()
-    for comp_name in components:
+    # Add traces in order from largest to smallest component
+    for comp_name in sorted_components:
         fig.add_trace(go.Bar(
             y=scenarios,
             x=[aggregated[s][comp_name] for s in scenarios],
