@@ -83,7 +83,6 @@ def generate_fallback_scenarios():
         for yr in years:
             fallback[scenario].append({
                 "blend_percentage": random.choice([0.0, 0.1, 0.2]),
-                "compliance_balance": random.uniform(1e6, 5e6),
                 "eu_ets":            random.uniform(0, 1e6),
                 "fuel_price":        random.uniform(1e7, 2e7),
                 "maintenance":       random.uniform(1e5, 5e5),
@@ -213,54 +212,6 @@ def dwelling_at_berth_pie_figure(dashboard_data, selected_scenarios=None):
     return fig
 
 
-def total_expenditure_stacked_bar_chart(dashboard_data, year_range):
-    """
-    Create a horizontal bar chart of Total Expenditure per scenario,
-    where Total Expenditure = fuel_price + maintenance + penalty + spare + eu_ets
-    summed across the given year_range.
-    """
-    aggregated = {}
-    start, end = year_range
-
-    for scenario, records in dashboard_data.items():
-        total = 0
-        for rec in records:
-            yr = rec.get("year")
-            if yr is None or yr < start or yr > end:
-                continue
-            total += (
-                rec.get("fuel_price", 0)
-                + rec.get("maintenance", 0)
-                + rec.get("penalty", 0)
-                + rec.get("spare", 0)
-                + rec.get("eu_ets", 0)
-            )
-        if total:
-            aggregated[scenario] = total
-
-    scenarios = list(aggregated.keys())
-    values    = [aggregated[s] for s in scenarios]
-
-    fig = go.Figure(
-        go.Bar(
-            x=values,
-            y=scenarios,
-            orientation="h",
-            marker_color="steelblue",
-            text=[f"€{v:,.0f}" for v in values],
-            textposition="auto"
-        )
-    )
-    fig.update_layout(
-        title=f"Total Expenditure per Scenario ({start}–{end})",
-        xaxis_title="Total Expenditure (€)",
-        yaxis_title="Scenario",
-        margin=dict(l=140, r=40, t=60, b=50)
-    )
-    return fig
-
-
-
 def min_future_opex_figure(dashboard_data=None, year_range=(2025, 2050)):
     """
     Sum each scenario’s opex over the year_range and plot a horizontal bar chart.
@@ -287,7 +238,7 @@ def min_future_opex_figure(dashboard_data=None, year_range=(2025, 2050)):
             x=totals,
             y=scenarios,
             orientation="h",
-            marker_color="darkcyan",
+            marker_color="steelblue",
             text=[f"€{v:,.0f}" for v in totals],
             textposition="auto"
         )
@@ -303,58 +254,66 @@ def min_future_opex_figure(dashboard_data=None, year_range=(2025, 2050)):
 
 
 
-def create_single_year_stacked_bar(dashboard_data, chosen_year):
+def create_range_stacked_bar(dashboard_data, year_range=(2025, 2050)):
     """
-    For the chosen_year, build a stacked bar of all cost components
-    for each scenario using the flat record.
+    For the given year_range, build a horizontal stacked‐bar of all cost components
+    aggregated across that range, for each scenario.
+    Hover shows Scenario, Component, and Value.
     """
-    # cost components and colors
     components = {
-        "Compliance": "compliance_balance",
-        "Fuel":       "fuel_price",
-        "Maintenance":"maintenance",
-        "Opex":       "opex",
-        "Penalty":    "penalty",
-        "Spare":      "spare",
-        "EU ETS":     "eu_ets"
+        "Fuel":        "fuel_price",
+        "Maintenance": "maintenance",
+        "Penalty":     "penalty",
+        "Spare":       "spare",
+        "EU ETS":      "eu_ets",
     }
     colors = {
-        "Compliance": "#636EFA",
-        "Fuel":       "#EF553B",
-        "Maintenance":"#00CC96",
-        "Opex":       "#AB63FA",
-        "Penalty":    "#FFA15A",
-        "Spare":      "#19D3F3",
-        "EU ETS":     "#FF6692"
+        "Fuel":        "#EF553B",
+        "Maintenance": "#00CC96",
+        "Penalty":     "#FFA15A",
+        "Spare":       "#19D3F3",
+        "EU ETS":      "#FF6692",
     }
 
-    # gather data
-    data_for_year = {}
+    start, end = year_range
+
+    # aggregate
+    aggregated = {}
     for scenario, records in dashboard_data.items():
-        rec = next((r for r in records if r.get("year")==chosen_year), None)
-        if rec:
-            data_for_year[scenario] = rec
+        sums = {c: 0 for c in components}
+        for rec in records:
+            yr = rec.get("year")
+            if yr is None or yr < start or yr > end:
+                continue
+            for name, key in components.items():
+                sums[name] += rec.get(key, 0)
+        if any(v for v in sums.values()):
+            aggregated[scenario] = sums
 
-    if not data_for_year:
-        return go.Figure().update_layout(title=f"No data for {chosen_year}")
+    if not aggregated:
+        return go.Figure().update_layout(
+            title=f"No data between {start} and {end}"
+        )
 
+    scenarios = list(aggregated)
     fig = go.Figure()
-    for scenario, rec in data_for_year.items():
-        for comp_name, comp_key in components.items():
-            val = rec.get(comp_key, 0)
-            if val:
-                fig.add_trace(go.Bar(
-                    y=[scenario],
-                    x=[val],
-                    name=comp_name,
-                    orientation="h",
-                    marker_color=colors[comp_name],
-                    hovertemplate=f"{comp_name}: €{{x:,.0f}}<extra></extra>"
-                ))
+    for comp_name in components:
+        fig.add_trace(go.Bar(
+            y=scenarios,
+            x=[aggregated[s][comp_name] for s in scenarios],
+            name=comp_name,
+            orientation="h",
+            marker_color=colors[comp_name],
+            hovertemplate=(
+                "Scenario: %{y}<br>"
+                f"{comp_name}: €%{{x:,.0f}}<extra></extra>"
+            )
+        ))
 
     fig.update_layout(
         barmode="stack",
-        title=f"Cost Breakdown for {chosen_year}",
+        hovermode="y unified",
+        title=f"Cost Breakdown per Scenario ({start}–{end})",
         xaxis_title="Cost (€)",
         yaxis_title="Scenario",
         margin=dict(l=140, r=40, t=60, b=50)
@@ -427,94 +386,143 @@ HEADER_TEXT_STYLE = {"color": "white"}
 # ----------------------------
 def financial_metrics_layout():
     """
-    Layout for the Financial Metrics tab with various filters and graphs.
-    Note: Removed view-type selector.
+    Layout for the Financial Metrics tab with dynamic chart selection.
     """
     HEADER_STYLE = {"backgroundColor": "#f8f9fa"}
     HEADER_TEXT_STYLE = {"color": "#343a40"}
 
-    year_options = [{"label": str(year), "value": str(year)} for year in range(2025, 2051)]
+    # Year options for the single-year dropdown
+    year_options = [{"label": str(y), "value": str(y)} for y in range(2025, 2051)]
+
+    # Options for selecting which charts to display
+    chart_options = [
+        {"label": "Metric Comparison", "value": "metric"},
+        {"label": "Future Opex",         "value": "min_future_opex"},
+        {"label": "Dwelling at Berth",   "value": "dwelling"},
+        {"label": "Single or Multiple Year Breakdown", "value": "single_year"},
+    ]
 
     return dbc.Card(
         [
             dbc.CardHeader(
-                html.H4("Economic Metrics (2025–2050)", className="card-title", style=HEADER_TEXT_STYLE),
+                html.H4("Economic Metrics (2025–2050)",
+                        className="card-title",
+                        style=HEADER_TEXT_STYLE),
                 style=HEADER_STYLE
             ),
             dbc.CardBody(
                 [
-                    dbc.Row([
-                        dbc.Col([
-                            dbc.Label("Metric"),
-                            dcc.Dropdown(
-                                id="metric-dropdown",
-                                options=[
-                                    {"label": "Opex", "value": "opex"},
-                                    {"label": "EU ETS", "value": "eu_ets"},
-                                    {"label": "Fuel Price", "value": "fuel_price"},
-                                    {"label": "Maintenance", "value": "maintenance"},
-                                    {"label": "Penalty", "value": "penalty"},
-                                    {"label": "Spare", "value": "spare"},
-                                    {"label": "Compliance Balance", "value": "compliance_balance"}
-                                ],
-                                value="opex",
-                                clearable=False,
-                                className="custom-dropdown"
-                            )
-                        ], md=3, xs=12),
-                        dbc.Col([
-                            dbc.Label("Year Range"),
-                            dcc.RangeSlider(
-                                id="year-range-slider",
-                                min=2025,
-                                max=2050,
-                                value=[2025, 2050],
-                                marks={
-                                    yr: {"label": str(yr), "style": {"transform": "rotate(45deg)", "whiteSpace": "nowrap"}}
-                                    for yr in range(2025, 2051, 5)
-                                },
-                                tooltip={"placement": "bottom", "always_visible": True}
-                            )
-                        ], md=5, xs=12),
-                        dbc.Col([
-                            dbc.Label("Scenario Filter"),
-                            dcc.Dropdown(
-                                id="scenario-filter",
-                                multi=True,
-                                className="custom-dropdown"
-                            )
-                        ], md=4, xs=12)
-                    ]),
-
-                    html.Br(),
-                    dcc.Graph(id="metric-comparison-chart", className="chart-container"),
-                    html.Hr(),
-                    dcc.Graph(id="min-future-opex", className="chart-container"),
-                    html.Hr(),
-                    dcc.Graph(id="financial-pie-chart", className="chart-container"),
-                    html.Hr(),
-                    dcc.Graph(id="total-expenditure", className="chart-container"),
-                    html.Hr(),
-                    html.Br(),
+                    # ─── Filters Row ────────────────────────────────────────
                     dbc.Row(
-                        dbc.Col([
-                            dbc.Label("Select Single Year for Breakdown"),
-                            dcc.Dropdown(
-                                id="single-year-dropdown",
-                                options=year_options,
-                                value="2026",
-                                clearable=False,
-                                className="custom-dropdown"
-                            )
-                        ], md=4, xs=12)
+                        [
+                            # Metric dropdown
+                            dbc.Col(
+                                [
+                                    dbc.Label("Metric"),
+                                    dcc.Dropdown(
+                                        id="dashboard-metric-dropdown",
+                                        options=[
+                                            {"label": "Opex",                "value": "opex"},
+                                            {"label": "EU ETS",              "value": "eu_ets"},
+                                            {"label": "Fuel Price",          "value": "fuel_price"},
+                                            {"label": "Maintenance",         "value": "maintenance"},
+                                            {"label": "Penalty",             "value": "penalty"},
+                                            {"label": "Spare",               "value": "spare"},
+                                            {"label": "Compliance Balance",  "value": "compliance_balance"}
+                                            
+                                        ],
+                                        value="opex",
+                                        clearable=False,
+                                        className="custom-dropdown",
+                                    )
+                                ],
+                                md=3, xs=12
+                            ),
+
+                            # Year range slider
+                            dbc.Col(
+                                [
+                                    dbc.Label("Year Range"),
+                                    dcc.RangeSlider(
+                                        id="dashboard-year-range-slider",
+                                        min=2025,
+                                        max=2050,
+                                        value=[2025, 2050],
+                                        marks={
+                                            yr: {"label": str(yr),
+                                                 "style": {"transform": "rotate(45deg)",
+                                                           "whiteSpace": "nowrap"}}
+                                            for yr in range(2025, 2051, 5)
+                                        },
+                                        tooltip={"placement": "bottom", "always_visible": True},
+                                    )
+                                ],
+                                md=5, xs=12
+                            ),
+
+                            # Scenario filter
+                            dbc.Col(
+                                [
+                                    dbc.Label("Scenario Filter"),
+                                    dcc.Dropdown(
+                                        id="scenario-filter",
+                                        multi=True,
+                                        className="custom-dropdown",
+                                        placeholder="Select scenarios…",
+                                    )
+                                ],
+                                md=4, xs=12
+                            ),
+                        ]
                     ),
-                    dcc.Graph(id="single-year-breakdown", className="chart-container"),
+
+                    html.Hr(),
+
+                    # ─── Chart Selector Row ──────────────────────────────────
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    dbc.Label("Which charts to show?"),
+                                    dcc.Checklist(
+                                        id="dashboard-chart-selector",
+                                        options=chart_options,
+                                        value=["metric"],  # default to metric comparison
+                                        inline=True,
+                                        inputStyle={"margin-right": "5px", "margin-left": "10px"},
+                                    ),
+                                ],
+                                width=12
+                            )
+                        ],
+                        className="mb-3"
+                    ),
+
+                    # ─── Single-Year Dropdown ───────────────────────────────
+                    dbc.Row(
+                        dbc.Col(
+                            [
+                                dbc.Label("Select Single Year for Breakdown"),
+                                dcc.Dropdown(
+                                    id="single-year-dropdown",
+                                    options=[{"label": "All Years", "value": "all"}] + year_options,
+                                    value="all",
+                                    clearable=False,
+                                    className="custom-dropdown"
+                                )
+                            ],
+                            md=4, xs=12
+                        ),
+                        className="mb-4"
+                    ),
+
+                    # ─── Dynamic Chart Container ─────────────────────────────
+                    html.Div(id="dashboard-charts-container")
                 ]
             )
         ],
         className="mb-4"
     )
-
 
 
 # ----------------------------

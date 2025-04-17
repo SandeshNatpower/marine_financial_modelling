@@ -725,51 +725,43 @@ def register_callbacks(app):
 
 
     @app.callback(
-        Output("total-expenditure", "figure"),
-        [
-            Input("year-range-slider",  "value"),
-            Input("scenario-filter",    "value"),
-            Input("dashboard-scenarios-store", "data"),
-        ]
-    )
-    def update_total_expenditure(year_range, selected_scenarios, dashboard_data):
-        if not dashboard_data or not selected_scenarios:
-            return go.Figure().update_layout(title="No data to display")
-
-        filtered_data = {
-            name: data
-            for name, data in dashboard_data.items()
-            if name in selected_scenarios
-        }
-
-        # Call without view parameter
-        total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(
-            filtered_data,
-            year_range
-        )
-        return total_exp_fig
-
-
-    @app.callback(
         Output("single-year-breakdown", "figure"),
         [
             Input("single-year-dropdown", "value"),
+            Input("dashboard-year-range-slider", "value"),      # <-- range slider in
             Input("dashboard-scenarios-store", "data"),
             Input("scenario-filter", "value")
         ]
     )
-    def update_single_year_breakdown(single_year, dashboard_data, selected_scenarios):
+    def update_single_year_breakdown(single_year, year_range, dashboard_data, selected_scenarios):
+        # guard
         if not dashboard_data or not selected_scenarios:
             return go.Figure().update_layout(title="No scenarios selected")
-        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
+
+        filtered_data = {
+            k: v for k, v in dashboard_data.items()
+            if k in selected_scenarios
+        }
+
+        # If user wants "all", draw the full-range stacked bar
         if single_year == "all":
-            return go.Figure().update_layout(title="Single-Year Breakdown: No single year selected")
+            return pages.power_profiles.create_range_stacked_bar(
+                filtered_data,
+                year_range=tuple(year_range)
+            )
+
+        # Otherwise parse a single year
         try:
-            chosen_year = int(single_year)
-        except ValueError:
+            yr = int(single_year)
+        except (ValueError, TypeError):
             return go.Figure().update_layout(title="Invalid year selected")
-        fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
-        return fig
+
+        # stack only that year (as a degenerate range)
+        return pages.power_profiles.create_range_stacked_bar(
+            filtered_data,
+            year_range=(yr, yr)
+        )
+
 
 
     @app.callback(
@@ -816,62 +808,96 @@ def register_callbacks(app):
             return f"Error formatting dashboard data: {e}"
     
 
-    
+        
     @app.callback(
         Output("dashboard-charts-container", "children"),
         [
-            Input("dashboard-chart-selector", "value"),
-            Input("dashboard-metric-dropdown", "value"),
+            Input("dashboard-chart-selector",    "value"),
+            Input("dashboard-metric-dropdown",   "value"),
             Input("dashboard-year-range-slider", "value"),
-            Input("dashboard-scenarios-store", "data"),
-            Input("single-year-dropdown", "value"),
-            Input("scenario-filter", "value")
+            Input("dashboard-scenarios-store",   "data"),
+            Input("single-year-dropdown",        "value"),
+            Input("scenario-filter",             "value"),
         ]
     )
-    def update_dashboard_charts(selected_charts, selected_metric, year_range, dashboard_data, single_year, selected_scenarios):
+    def update_dashboard_charts(
+        selected_charts,
+        selected_metric,
+        year_range,
+        dashboard_data,
+        single_year,
+        selected_scenarios
+    ):
+        # Guards
         if not dashboard_data:
-            return html.Div("No data available. Please calculate scenarios first.", className="text-center text-danger")
+            return html.Div("No data available. Please calculate scenarios first.",
+                            className="text-center text-danger")
         if not selected_scenarios:
-            return html.Div("No scenarios selected. Please select scenarios to display.", className="text-warning")
+            return html.Div("No scenarios selected. Please select scenarios to display.",
+                            className="text-warning")
 
+        filtered = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
         charts = []
-        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
 
+        # 2.1 Metric Comparison
         if "metric" in selected_charts:
-            metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios, filtered_data)
-            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+            fig = pages.power_profiles.generate_metric_figure(
+                selected_metric,
+                tuple(year_range),
+                selected_scenarios,
+                filtered
+            )
+            # add a unified hovermode for these too
+            fig.update_layout(hovermode="y unified")
+            charts.append(card_component(
+                "Metric Comparison",
+                dcc.Graph(figure=fig, className="chart-container")
+            ))
 
+        # 2.2 Future Opex
         if "min_future_opex" in selected_charts:
-            opex_fig = pages.power_profiles.min_future_opex_figure(filtered_data, year_range=tuple(year_range))
-            charts.append(card_component("Future Opex", dcc.Graph(figure=opex_fig, className="chart-container")))
+            fig = pages.power_profiles.min_future_opex_figure(
+                filtered,
+                year_range=tuple(year_range)
+            )
+            fig.update_layout(hovermode="y unified")
+            charts.append(card_component(
+                "Future Opex",
+                dcc.Graph(figure=fig, className="chart-container")
+            ))
 
+        # 2.3 Dwelling Pie
         if "dwelling" in selected_charts:
-            dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
-            charts.append(card_component("Dwelling at Berth", dcc.Graph(figure=dwelling_fig, className="chart-container")))
+            fig = pages.power_profiles.dwelling_at_berth_pie_figure(
+                filtered,
+                selected_scenarios
+            )
+            charts.append(card_component(
+                "Dwelling at Berth",
+                dcc.Graph(figure=fig, className="chart-container")
+            ))
 
-        if "total_expenditure" in selected_charts:
-            total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(filtered_data, year_range)
-            charts.append(card_component("Total Expenditure Comparison", dcc.Graph(figure=total_exp_fig, className="chart-container")))
-
+        # 2.4 Single‑/Multi‑Year Stacked Bar
         if "single_year" in selected_charts:
+            # all years → full range
             if single_year == "all":
-                single_year_fig = go.Figure().update_layout(title="No single year selected")
+                fig = pages.power_profiles.create_range_stacked_bar(filtered, year_range=tuple(year_range))
             else:
                 try:
-                    chosen_year = int(single_year)
-                except ValueError:
-                    chosen_year = None
-                if chosen_year is None:
-                    single_year_fig = go.Figure().update_layout(title="Invalid year selected")
-                else:
-                    single_year_fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
-            charts.append(card_component("Single Year Breakdown", dcc.Graph(figure=single_year_fig, className="chart-container")))
+                    yr = int(single_year)
+                    fig = pages.power_profiles.create_range_stacked_bar(filtered, year_range=(yr, yr))
+                except (ValueError, TypeError):
+                    fig = go.Figure().update_layout(title="Invalid year selected")
+            charts.append(card_component(
+                "Cost Breakdown",
+                dcc.Graph(figure=fig, className="chart-container")
+            ))
 
         if not charts:
-            return html.Div("Please select at least one chart to display.", className="text-warning")
+            return html.Div("Please select at least one chart to display.",
+                            className="text-warning")
 
         return html.Div(charts)
-
 
     @app.callback(
         [
