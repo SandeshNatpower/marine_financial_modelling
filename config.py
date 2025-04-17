@@ -6,7 +6,7 @@ import requests
 API_BASE = os.getenv("API_BASE", "https://natpower-marine-api-dev.azurewebsites.net/marinedata")
 VESSEL_ENDPOINT = f"{API_BASE}/getvesseldetails_engine_places"
 FINANCIAL_ENDPOINT = f"{API_BASE}/financialmodelling"
-DASHBOARD_ENDPOINT = f"{API_BASE}/financialmodellingscenariosnew"
+DASHBOARD_ENDPOINT = f"{API_BASE}/financialmodellingscenarios"
 
 # Default Vessel Data with Extended Engine and Operational Parameters
 DEFAULT_VESSEL = {

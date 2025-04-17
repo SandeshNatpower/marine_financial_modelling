@@ -189,9 +189,9 @@ def get_current_output_table(api_data, currency):
     table_header = html.Thead([
         html.Tr([
             html.Th("Current output table", colSpan=2, style={"backgroundColor": "#0A4B8C", "color": "white"}),
-            html.Th("Sailing", style={"backgroundColor": "#0A4B8C", "color": "white"}),
-            html.Th("Working", style={"backgroundColor": "#0A4B8C", "color": "white"}),
-            html.Th("Idle / Moored", style={"backgroundColor": "#0A4B8C", "color": "white"}),
+            html.Th("Propulsion", style={"backgroundColor": "#0A4B8C", "color": "white"}),
+            html.Th("Parked / Mooring", style={"backgroundColor": "#0A4B8C", "color": "white"}),
+            html.Th("Cold Ironing", style={"backgroundColor": "#0A4B8C", "color": "white"}),
             html.Th("Shore Power", style={"backgroundColor": "#0A4B8C", "color": "white"}),
             html.Th("Average", style={"backgroundColor": "#0A4B8C", "color": "white"})
         ]),
@@ -562,9 +562,9 @@ def get_future_output_table(api_data, currency):
     table_header = html.Thead([
         html.Tr([
             html.Th("Future output table", colSpan=2, style={"backgroundColor": "#0A4B8C", "color": "white"}),
-            html.Th("Sailing", style={"backgroundColor": "#0A4B8C", "color": "white"}),
-            html.Th("Working", style={"backgroundColor": "#0A4B8C", "color": "white"}),
-            html.Th("Idle / Moored", style={"backgroundColor": "#0A4B8C", "color": "white"}),
+            html.Th("Propulsion", style={"backgroundColor": "#0A4B8C", "color": "white"}),
+            html.Th("Parked / Mooring", style={"backgroundColor": "#0A4B8C", "color": "white"}),
+            html.Th("Cold Ironing", style={"backgroundColor": "#0A4B8C", "color": "white"}),
             html.Th("Shore Power", style={"backgroundColor": "#0A4B8C", "color": "white"}),
             html.Th("Average", style={"backgroundColor": "#0A4B8C", "color": "white"})
         ]),
@@ -1275,9 +1275,9 @@ def get_carbon_footprint_table(api_data):
     header = html.Thead(
         html.Tr([
             html.Th("Carbon Footprint"),
-            html.Th("Sailing"),
-            html.Th("Working"),
-            html.Th("Idle"),
+            html.Th("Propulsion"),
+            html.Th("Parked / Mooring"),
+            html.Th("Cold Ironing"),
         ]),
         style={"backgroundColor": "#0A4B8C", "color": "white"}
     )
@@ -1407,7 +1407,7 @@ def get_vessel_summary_table(api_data, currency):
             html.Th("Operation Profile"),
             html.Th("Unit"),
             html.Th("Propulsion"),
-            html.Th("Parked/Mooring"),
+            html.Th("Parked / Mooring"),
             html.Th("Cold Ironing"),
         ]),
         style={"backgroundColor": "#0A4B8C", "color": "white"}

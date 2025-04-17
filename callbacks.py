@@ -521,19 +521,6 @@ def register_callbacks(app):
             print(f"Scenario API Error: {str(e)}")
             return dash.no_update
 
-    
-    @app.callback(
-        [Output("scenario-filter", "options"),
-         Output("scenario-filter", "value")],
-        [Input("dashboard-scenarios-store", "data")]
-    )
-    def update_scenario_filter(dashboard_data):
-        if not dashboard_data:
-            return [], []
-        scenarios = list(dashboard_data.keys())
-        options = [{"label": sc, "value": sc} for sc in scenarios]
-        default_value = scenarios[:2] if len(scenarios) >= 2 else scenarios
-        return options, default_value
         
     @app.callback(
         [Output("dashboard-scenario-dropdown", "options"),
@@ -704,7 +691,7 @@ def register_callbacks(app):
         
         return financial_data, "output", updated_future_data
     
-    """ # Callback 1: Update Scenario Filter Options and Default Value
+
     @app.callback(
         [Output("scenario-filter", "options"),
          Output("scenario-filter", "value")],
@@ -712,12 +699,11 @@ def register_callbacks(app):
     )
     def update_scenario_filter(dashboard_data):
         if not dashboard_data:
-            raise PreventUpdate
-
-        _, scenarios = pages.power_profiles.load_min_future_opex_scenarios(dashboard_data)
-        scenario_options = [{"label": k, "value": k} for k in scenarios.keys()]
-        default_scenarios = list(scenarios.keys())
-        return scenario_options, default_scenarios """
+            return [], []
+        scenarios = list(dashboard_data.keys())
+        options = [{"label": sc, "value": sc} for sc in scenarios]
+        default_value = scenarios[:2] if len(scenarios) >= 2 else scenarios
+        return options, default_value
 
     @app.callback(
         [Output("min-future-opex", "figure"),
@@ -741,18 +727,26 @@ def register_callbacks(app):
     @app.callback(
         Output("total-expenditure", "figure"),
         [
-            Input("year-range-slider", "value"),
-            Input("scenario-filter", "value"),            # <<--- scenario filter
+            Input("year-range-slider",  "value"),
+            Input("scenario-filter",    "value"),
             Input("dashboard-scenarios-store", "data"),
-            Input("data-view-selector", "value")
         ]
     )
-    def update_total_expenditure(year_range, selected_scenarios, dashboard_data, data_view):
+    def update_total_expenditure(year_range, selected_scenarios, dashboard_data):
         if not dashboard_data or not selected_scenarios:
-            return go.Figure().update_layout(title="No scenarios selected")
+            return go.Figure().update_layout(title="No data to display")
 
-        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
-        total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(filtered_data, year_range, view=data_view)
+        filtered_data = {
+            name: data
+            for name, data in dashboard_data.items()
+            if name in selected_scenarios
+        }
+
+        # Call without view parameter
+        total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(
+            filtered_data,
+            year_range
+        )
         return total_exp_fig
 
 
@@ -761,26 +755,19 @@ def register_callbacks(app):
         [
             Input("single-year-dropdown", "value"),
             Input("dashboard-scenarios-store", "data"),
-            Input("scenario-filter", "value")             # <<--- scenario filter
+            Input("scenario-filter", "value")
         ]
     )
     def update_single_year_breakdown(single_year, dashboard_data, selected_scenarios):
-        # If no data or no scenarios selected, show an empty figure.
         if not dashboard_data or not selected_scenarios:
             return go.Figure().update_layout(title="No scenarios selected")
-
-        # Filter the data to include only the selected scenarios.
         filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
-
         if single_year == "all":
             return go.Figure().update_layout(title="Single-Year Breakdown: No single year selected")
-        
-        # Convert user input to an integer year
         try:
             chosen_year = int(single_year)
         except ValueError:
             return go.Figure().update_layout(title="Invalid year selected")
-
         fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
         return fig
 
@@ -788,25 +775,31 @@ def register_callbacks(app):
     @app.callback(
         Output("metric-comparison-chart", "figure"),
         [
-            Input("metric-dropdown", "value"),
-            Input("year-range-slider", "value"),
-            Input("scenario-filter", "value"),           
+            Input("metric-dropdown",    "value"),
+            Input("year-range-slider",  "value"),
+            Input("scenario-filter",    "value"),
             Input("dashboard-scenarios-store", "data"),
-            Input("data-view-selector", "value")
         ]
     )
-    def update_metric_comparison(metric, year_range, selected_scenarios, dashboard_data, data_view):
-        # 1) If there is no data or no selected scenarios, show a "no data" figure
+    def update_metric_comparison(metric, year_range, selected_scenarios, dashboard_data):
         if not dashboard_data or not selected_scenarios:
-            return go.Figure().update_layout(title="No scenarios selected")
+            return go.Figure().update_layout(title="No data to display")
 
-        # 2) Filter the data so that only keys that match the user’s scenario selections are included
-        filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
+        # Filter only the selected scenarios
+        filtered_data = {
+            name: data
+            for name, data in dashboard_data.items()
+            if name in selected_scenarios
+        }
 
-        # 3) Generate the figure using only the filtered data
-        fig = pages.power_profiles.generate_metric_figure(metric, year_range, selected_scenarios, filtered_data, data_view)
+        # Call without data_view
+        fig = pages.power_profiles.generate_metric_figure(
+            metric,
+            year_range,
+            selected_scenarios,
+            filtered_data
+        )
         return fig
-
 
 
     
@@ -826,486 +819,244 @@ def register_callbacks(app):
     
     @app.callback(
         Output("dashboard-charts-container", "children"),
-        [Input("dashboard-chart-selector", "value"),
-        Input("dashboard-metric-dropdown", "value"),
-        Input("dashboard-year-range-slider", "value"),
-        Input("dashboard-view-selector", "value"),
-        Input("dashboard-scenarios-store", "data"),
-        Input("single-year-dropdown", "value"),
-        Input("scenario-filter", "value")]  # This input was missing from the function params
+        [
+            Input("dashboard-chart-selector", "value"),
+            Input("dashboard-metric-dropdown", "value"),
+            Input("dashboard-year-range-slider", "value"),
+            Input("dashboard-scenarios-store", "data"),
+            Input("single-year-dropdown", "value"),
+            Input("scenario-filter", "value")
+        ]
     )
-    def update_dashboard_charts(selected_charts, selected_metric, year_range, data_view, 
-                            dashboard_data, single_year, selected_scenarios):
+    def update_dashboard_charts(selected_charts, selected_metric, year_range, dashboard_data, single_year, selected_scenarios):
         if not dashboard_data:
             return html.Div("No data available. Please calculate scenarios first.", className="text-center text-danger")
-        
         if not selected_scenarios:
             return html.Div("No scenarios selected. Please select scenarios to display.", className="text-warning")
-        
+
         charts = []
-        # Use the filtered data based on user-selected scenarios
         filtered_data = {k: v for k, v in dashboard_data.items() if k in selected_scenarios}
-        
-        # Metric Comparison Chart
+
         if "metric" in selected_charts:
-            metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, 
-                                                                    selected_scenarios, filtered_data, data_view)
-            charts.append(
-                card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container"))
-            )
-        
-        # Min Future OPEX Chart
+            metric_fig = pages.power_profiles.generate_metric_figure(selected_metric, year_range, selected_scenarios, filtered_data)
+            charts.append(card_component("Metric Comparison", dcc.Graph(figure=metric_fig, className="chart-container")))
+
         if "min_future_opex" in selected_charts:
             opex_fig = pages.power_profiles.min_future_opex_figure(filtered_data, year_range=tuple(year_range))
-            charts.append(
-                card_component("Future Opex", dcc.Graph(figure=opex_fig, className="chart-container"))
-            )
-        
-        # Dwelling at Berth Pie Chart
+            charts.append(card_component("Future Opex", dcc.Graph(figure=opex_fig, className="chart-container")))
+
         if "dwelling" in selected_charts:
             dwelling_fig = pages.power_profiles.dwelling_at_berth_pie_figure(filtered_data, selected_scenarios)
-            charts.append(
-                card_component("Dwelling at Berth", dcc.Graph(figure=dwelling_fig, className="chart-container"))
-            )
-        
-        # Total Expenditure Comparison Chart
+            charts.append(card_component("Dwelling at Berth", dcc.Graph(figure=dwelling_fig, className="chart-container")))
+
         if "total_expenditure" in selected_charts:
-            total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(filtered_data, year_range, view=data_view)
-            charts.append(
-                card_component("Total Expenditure Comparison", dcc.Graph(figure=total_exp_fig, className="chart-container"))
-            )
-        
-        # Single-Year Breakdown Chart - keeping default behavior for the year selection
+            total_exp_fig = pages.power_profiles.total_expenditure_stacked_bar_chart(filtered_data, year_range)
+            charts.append(card_component("Total Expenditure Comparison", dcc.Graph(figure=total_exp_fig, className="chart-container")))
+
         if "single_year" in selected_charts:
             if single_year == "all":
                 single_year_fig = go.Figure().update_layout(title="No single year selected")
             else:
-                chosen_year = int(single_year)
-                single_year_fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
-            charts.append(
-                card_component("Single Year Breakdown", dcc.Graph(figure=single_year_fig, className="chart-container"))
-            )
-        
+                try:
+                    chosen_year = int(single_year)
+                except ValueError:
+                    chosen_year = None
+                if chosen_year is None:
+                    single_year_fig = go.Figure().update_layout(title="Invalid year selected")
+                else:
+                    single_year_fig = pages.power_profiles.create_single_year_stacked_bar(filtered_data, chosen_year)
+            charts.append(card_component("Single Year Breakdown", dcc.Graph(figure=single_year_fig, className="chart-container")))
+
         if not charts:
             return html.Div("Please select at least one chart to display.", className="text-warning")
-        
+
         return html.Div(charts)
+
 
     @app.callback(
         [
-            Output("kpi-avg-opex", "children"),
-            Output("kpi-opex-trend", "children"),
-            Output("kpi-compliance", "children"),
+            Output("kpi-avg-opex",      "children"),
+            Output("kpi-opex-trend",    "children"),
+            Output("kpi-compliance",    "children"),
             Output("kpi-compliance-status", "children"),
-            Output("kpi-penalty", "children"),
-            Output("kpi-penalty-savings", "children"),
-            Output("kpi-blend", "children"),
-            Output("kpi-blend-trend", "children"),
-            Output("dashboard-opex-trend", "figure"),
+            Output("kpi-penalty",       "children"),
+            Output("kpi-penalty-savings","children"),
+            Output("kpi-blend",         "children"),
+            Output("kpi-blend-trend",   "children"),
+            Output("dashboard-opex-trend",       "figure"),
+            Output("dashboard-penalty-trend",    "figure"),
             Output("dashboard-compliance-chart", "figure"),
-            Output("dashboard-cost-breakdown", "figure"),
-            Output("dashboard-eu-ets-chart", "figure"),
-            Output("dashboard-metrics-table", "children"),
+            Output("dashboard-cost-breakdown",   "figure"),
+            Output("dashboard-eu-ets-chart",     "figure"),
+            Output("dashboard-metrics-table",    "children"),
             Output("dashboard-cost-breakdown-year", "options"),
-            Output("dashboard-cost-breakdown-year", "value")
+            Output("dashboard-cost-breakdown-year", "value"),
         ],
         [
-            Input("dashboard-year-range", "value"),
-            Input("dashboard-scenario-dropdown", "value"),
-            Input("dashboard-view-type", "value"),
-            Input("dashboard-scenarios-store", "data"),
-            Input("dashboard-cost-breakdown-year", "value")
+            Input("dashboard-year-range",         "value"),
+            Input("dashboard-scenario-dropdown",  "value"),
+            Input("dashboard-scenarios-store",    "data"),
+            Input("dashboard-cost-breakdown-year","value"),
         ]
     )
-    def update_executive_dashboard(year_range, selected_scenario, view_type, dashboard_data, selected_cb_year_input):
-        # Handle missing data
+    def update_executive_dashboard(year_range, selected_scenario, dashboard_data, selected_cb_year_input):
+        # Build an empty‐data placeholder
+        empty_fig = go.Figure().update_layout(
+            xaxis={"visible": False}, yaxis={"visible": False},
+            annotations=[{
+                "text": "No data available",
+                "xref": "paper", "yref": "paper",
+                "showarrow": False, "font": {"size": 20}
+            }]
+        )
+
+        # 1) No data or invalid scenario
         if not dashboard_data or selected_scenario not in dashboard_data:
-            empty_fig = go.Figure()
-            empty_fig.update_layout(
-                xaxis={"visible": False},
-                yaxis={"visible": False},
-                annotations=[{
-                    "text": "No data available. Please calculate scenarios first.",
-                    "xref": "paper",
-                    "yref": "paper",
-                    "showarrow": False,
-                    "font": {"size": 20}
-                }]
-            )
             return (
-                "N/A", "No data", "N/A", "No data", "N/A", "No data", "N/A", "No data",
-                empty_fig, empty_fig, empty_fig, empty_fig,
+                "N/A", "No data",
+                "N/A", "No data",
+                "N/A", "No data",
+                "N/A", "No data",
+                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig,
                 html.Div("No data available", className="text-center"),
                 [], None
             )
-        
-        scenario_data = dashboard_data[selected_scenario]
-        filtered_data = [entry for entry in scenario_data if year_range[0] <= entry["year"] <= year_range[1]]
-        
-        if not filtered_data:
-            empty_fig = go.Figure()
-            empty_fig.update_layout(
-                xaxis={"visible": False},
-                yaxis={"visible": False},
-                annotations=[{
-                    "text": "No data available for the selected year range.",
-                    "xref": "paper",
-                    "yref": "paper",
-                    "showarrow": False,
-                    "font": {"size": 20}
-                }]
-            )
+
+        # 2) Filter records by year_range
+        records = dashboard_data[selected_scenario]
+        filtered = [r for r in records
+                    if r.get("year") is not None
+                    and year_range[0] <= r["year"] <= year_range[1]]
+        if not filtered:
             return (
-                "N/A", "No data", "N/A", "No data", "N/A", "No data", "N/A", "No data",
-                empty_fig, empty_fig, empty_fig, empty_fig,
+                "N/A", "No data",
+                "N/A", "No data",
+                "N/A", "No data",
+                "N/A", "No data",
+                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig,
                 html.Div("No data for selected years", className="text-center"),
                 [], None
             )
-        
-        years = [entry["year"] for entry in filtered_data]
-        
-        if view_type == "future":
-            opex_values = [entry["future"]["opex"] for entry in filtered_data]
-            compliance_values = [entry["future"]["compliance_balance"] for entry in filtered_data]
-            eu_ets_values = [entry["future"]["eu_ets"] for entry in filtered_data]
-            fuel_price = [entry["future"]["fuel_price"] for entry in filtered_data]
-            maintenance = [entry["future"]["maintenance"] for entry in filtered_data]
-            penalty_values = [entry["future"]["penalty"] for entry in filtered_data]
-        elif view_type == "current":
-            opex_values = [entry["current"]["opex"] for entry in filtered_data]
-            compliance_values = [entry["current"]["compliance_balance"] for entry in filtered_data]
-            eu_ets_values = [entry["current"]["eu_ets"] for entry in filtered_data]
-            fuel_price = [entry["current"]["fuel_price"] for entry in filtered_data]
-            maintenance = [entry["current"]["maintenance"] for entry in filtered_data]
-            penalty_values = [entry["current"]["penalty"] for entry in filtered_data]
-        else:  # view_type == "both"
-            future_opex = [entry["future"]["opex"] for entry in filtered_data]
-            current_opex = [entry["current"]["opex"] for entry in filtered_data]
-            future_compliance = [entry["future"]["compliance_balance"] for entry in filtered_data]
-            current_compliance = [entry["current"]["compliance_balance"] for entry in filtered_data]
-            future_eu_ets = [entry["future"]["eu_ets"] for entry in filtered_data]
-            current_eu_ets = [entry["current"]["eu_ets"] for entry in filtered_data]
-            opex_values = future_opex
-            compliance_values = future_compliance
-            eu_ets_values = future_eu_ets
-            fuel_price = [entry["future"]["fuel_price"] for entry in filtered_data]
-            maintenance = [entry["future"]["maintenance"] for entry in filtered_data]
-            penalty_values = [entry["future"]["penalty"] for entry in filtered_data]
-        
-        blend_percentages = [entry["blend_percentage"] for entry in filtered_data]
-        avg_blend = sum(blend_percentages) / len(blend_percentages)
-        blend_trend = "Increasing" if blend_percentages[-1] > blend_percentages[0] else "Stable" if blend_percentages[-1] == blend_percentages[0] else "Decreasing"
-        
-        avg_opex = sum(opex_values) / len(opex_values)
-        opex_trend = "Increasing" if opex_values[-1] > opex_values[0] else "Decreasing"
-        avg_compliance = sum(compliance_values) / len(compliance_values)
-        compliance_status = "Positive" if avg_compliance > 0 else "Negative"
-        
-        if view_type == "both":
-            current_penalties = [entry["current"]["penalty"] for entry in filtered_data]
-            future_penalties = [entry["future"]["penalty"] for entry in filtered_data]
-            total_current_penalty = sum(current_penalties)
-            total_future_penalty = sum(future_penalties)
-            penalty_reduction = total_current_penalty - total_future_penalty
-            penalty_percentage = (penalty_reduction / total_current_penalty * 100) if total_current_penalty > 0 else 0
-        else:
-            total_penalty = sum(penalty_values)
-            penalty_reduction = total_penalty
-            penalty_percentage = 100
 
-        total_savings = sum([entry["current"]["opex"] - entry["future"]["opex"] for entry in filtered_data]) if view_type == "both" else None
+        # 3) Extract time series
+        years      = [r["year"]               for r in filtered]
+        opex       = [r["opex"]               for r in filtered]
+        compliance = [r["compliance_balance"] for r in filtered]
+        eu_ets     = [r["eu_ets"]             for r in filtered]
+        penalty    = [r["penalty"]            for r in filtered]
+        blend_pct  = [r["blend_percentage"]   for r in filtered]
 
-        # ----- Chart: OPEX Trend -----
-        opex_fig = go.Figure()
-        if view_type == "both":
-            opex_fig.add_trace(go.Scatter(
-                x=years, y=current_opex, mode='lines+markers', name='Current OPEX',
-                line=dict(color='#FF7F0E', width=2)
-            ))
-            opex_fig.add_trace(go.Scatter(
-                x=years, y=future_opex, mode='lines+markers', name='Future OPEX',
-                line=dict(color='#1F77B4', width=2)
-            ))
-        else:
-            opex_fig.add_trace(go.Scatter(
-                x=years, y=opex_values, mode='lines+markers', name='OPEX',
-                line=dict(color='#1F77B4', width=2)
-            ))
+        # 4) Compute KPIs
+        avg_opex        = sum(opex) / len(opex)
+        opex_trend      = "Increasing" if opex[-1] > opex[0] else "Decreasing"
+        avg_compliance  = sum(compliance) / len(compliance)
+        compliance_stat = "Positive" if avg_compliance > 0 else "Negative"
+        latest_penalty  = penalty[-1]
+        avg_blend       = sum(blend_pct) / len(blend_pct)
+        blend_trend     = (
+            "Increasing"  if blend_pct[-1] > blend_pct[0] else
+            "Stable"      if blend_pct[-1] == blend_pct[0] else
+            "Decreasing"
+        )
+
+        # 5) OPEX Trend chart
+        opex_fig = go.Figure().add_trace(go.Scatter(
+            x=years, y=opex, mode='lines+markers', name='OPEX'
+        ))
         opex_fig.update_layout(
-            xaxis_title='Year',
-            yaxis_title='OPEX (€)',
+            xaxis_title='Year', yaxis_title='OPEX (€)',
+            template='plotly_white', height=350
+        )
+
+        # 6) Penalty Trend (with flat‐line fix)
+        penalty_fig = go.Figure().add_trace(go.Scatter(
+            x=years, y=penalty, mode='lines+markers', name='Penalty'
+        ))
+        penalty_fig.update_layout(
+            xaxis_title='Year', yaxis_title='Penalty (€)',
+            template='plotly_white', height=350
+        )
+        # if penalty series is flat, force a tiny y‐range so the line shows
+        if penalty and min(penalty) == max(penalty):
+            flat  = penalty[0]
+            delta = flat * 0.1 if flat else 1
+            penalty_fig.update_yaxes(range=[flat - delta, flat + delta])
+
+        # 7) Compliance Trend
+        comp_fig = go.Figure().add_trace(go.Scatter(
+            x=years, y=compliance, mode='lines+markers', name='Compliance'
+        ))
+        comp_fig.update_layout(
+            xaxis_title='Year', yaxis_title='Compliance (€)',
+            template='plotly_white', height=350
+        )
+
+        # 8) Cost Breakdown for selected_cb_year_input
+        unique_years = sorted({r["year"] for r in filtered})
+        sel_year     = selected_cb_year_input if selected_cb_year_input in unique_years else unique_years[-1]
+        entry        = next(r for r in filtered if r["year"] == sel_year)
+
+        cb_fig = go.Figure()
+        for key, label in [
+            ("fuel_price",  "Fuel Price"),
+            ("maintenance", "Maintenance"),
+            ("eu_ets",      "EU ETS"),
+            ("penalty",     "Penalty")
+        ]:
+            cb_fig.add_trace(go.Bar(
+                y=[str(sel_year)],
+                x=[entry.get(key, 0)],
+                name=label,
+                orientation='h'
+            ))
+        cb_fig.update_layout(
+            barmode='stack',
+            xaxis_title='Cost (€)',
             template='plotly_white',
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(l=40, r=40, t=40, b=40),
             height=350
         )
-        
-        # ----- Chart: Compliance Balance -----
-        compliance_fig = go.Figure()
-        if view_type == "both":
-            compliance_fig.add_trace(go.Scatter(
-                x=years, y=current_compliance, mode='lines+markers', name='Current Compliance',
-                line=dict(color='#FF7F0E', width=2)
-            ))
-            compliance_fig.add_trace(go.Scatter(
-                x=years, y=future_compliance, mode='lines+markers', name='Future Compliance',
-                line=dict(color='#1F77B4', width=2)
-            ))
-        else:
-            compliance_fig.add_trace(go.Scatter(
-                x=years, y=compliance_values, mode='lines+markers', name='Compliance Balance',
-                line=dict(color='#2CA02C', width=2)
-            ))
-        compliance_fig.update_layout(
-            xaxis_title='Year',
-            yaxis_title='Compliance Balance (€)',
-            template='plotly_white',
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(l=40, r=40, t=40, b=40),
-            height=350
-        )
-        
-        # ----- Chart: Cost Breakdown -----
-        unique_years = sorted(list({entry["year"] for entry in filtered_data}))
-        if selected_cb_year_input in unique_years:
-            selected_cb_year = selected_cb_year_input
-        else:
-            selected_cb_year = unique_years[-1]
-        matching_entries = [entry for entry in filtered_data if entry["year"] == selected_cb_year]
-        if matching_entries:
-            cost_breakdown_entry = matching_entries[0]
-        else:
-            cost_breakdown_entry = filtered_data[-1]
-        
-        if view_type == "both":
-            current_data = cost_breakdown_entry["current"]
-            future_data  = cost_breakdown_entry["future"]
-            cb_year = cost_breakdown_entry["year"]
-            cost_breakdown_fig = go.Figure()
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Current"],
-                x=[current_data["fuel_price"]],
-                name='Fuel Price',
-                orientation='h',
-                marker=dict(color='gray')
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Current"],
-                x=[current_data["maintenance"]],
-                name='Maintenance',
-                orientation='h',
-                marker=dict(color='#FF7F0E')
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Current"],
-                x=[current_data["eu_ets"]],
-                name='EU ETS',
-                orientation='h',
-                marker=dict(color='#2CA02C')
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Current"],
-                x=[current_data["penalty"]],
-                name='Penalty',
-                orientation='h',
-                marker=dict(color='#D62728')
-            ))
-            # Future data:
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Future"],
-                x=[future_data["fuel_price"]],
-                name='Fuel Price',
-                orientation='h',
-                marker=dict(color='gray'),
-                showlegend=False
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Future"],
-                x=[future_data["maintenance"]],
-                name='Maintenance',
-                orientation='h',
-                marker=dict(color='#FF7F0E'),
-                showlegend=False
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Future"],
-                x=[future_data["eu_ets"]],
-                name='EU ETS',
-                orientation='h',
-                marker=dict(color='#2CA02C'),
-                showlegend=False
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=["Future"],
-                x=[future_data["penalty"]],
-                name='Penalty',
-                orientation='h',
-                marker=dict(color='#D62728'),
-                showlegend=False
-            ))
-            barmode = 'group'
-        else:
-            cb_year = cost_breakdown_entry["year"]
-            recent_data = cost_breakdown_entry[view_type]
-            cost_breakdown_fig = go.Figure()
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=[f"{view_type.capitalize()} ({cb_year})"],
-                x=[recent_data["fuel_price"]],
-                name='Fuel Price',
-                orientation='h',
-                marker=dict(color='gray')
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=[f"{view_type.capitalize()} ({cb_year})"],
-                x=[recent_data["maintenance"]],
-                name='Maintenance',
-                orientation='h',
-                marker=dict(color='#FF7F0E')
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=[f"{view_type.capitalize()} ({cb_year})"],
-                x=[recent_data["eu_ets"]],
-                name='EU ETS',
-                orientation='h',
-                marker=dict(color='#2CA02C')
-            ))
-            cost_breakdown_fig.add_trace(go.Bar(
-                y=[f"{view_type.capitalize()} ({cb_year})"],
-                x=[recent_data["penalty"]],
-                name='Penalty',
-                orientation='h',
-                marker=dict(color='#D62728')
-            ))
-            barmode = 'stack'
-        
-        cost_breakdown_fig.update_layout(
-            barmode=barmode,
-            title=f'Cost Breakdown for {cb_year}',
-            xaxis=dict(title='Cost (€)'),
-            yaxis=dict(title=''),
-            template='plotly_white',
-            margin=dict(l=40, r=40, t=60, b=40),
-            height=350
-        )
-        
-        # ----- Chart: EU ETS Impact -----
-        eu_ets_fig = go.Figure()
-        if view_type == "both":
-            if max(current_eu_ets) == 0 and max(future_eu_ets) == 0:
-                eu_ets_fig.add_annotation(
-                    text="No EU ETS impact for selected years.",
-                    xref="paper", yref="paper",
-                    x=0.5, y=0.5, showarrow=False,
-                    font=dict(size=16, color="grey")
-                )
-            else:
-                eu_ets_fig.add_trace(go.Bar(
-                    x=years, y=current_eu_ets, name='Current EU ETS',
-                    marker_color='#FF7F0E'
-                ))
-                eu_ets_fig.add_trace(go.Bar(
-                    x=years, y=future_eu_ets, name='Future EU ETS',
-                    marker_color='#1F77B4'
-                ))
-        else:
-            if max(eu_ets_values) == 0:
-                eu_ets_fig.add_annotation(
-                    text="No EU ETS impact for selected years.",
-                    xref="paper", yref="paper",
-                    x=0.5, y=0.5, showarrow=False,
-                    font=dict(size=16, color="grey")
-                )
-            else:
-                color_choice = '#1F77B4' if view_type == 'future' else '#FF7F0E'
-                name_label   = 'Future EU ETS' if view_type == 'future' else 'Current EU ETS'
-                eu_ets_fig.add_trace(go.Bar(
-                    x=years, y=eu_ets_values, name=name_label,
-                    marker_color=color_choice
-                ))
-        eu_ets_fig.update_layout(
+
+        # 9) EU ETS Impact
+        ets_fig = go.Figure().add_trace(go.Bar(
+            x=years, y=eu_ets, name='EU ETS'
+        ))
+        ets_fig.update_layout(
             xaxis_title='Year',
             yaxis_title='EU ETS (€)',
             template='plotly_white',
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(l=40, r=40, t=40, b=40),
             height=350
         )
-        
-        # ----- Build Metrics Table -----
-        headers = ["Year", "Blend %"]
-        table_data = []
-        if view_type == "both":
-            headers.extend(["Current OPEX", "Future OPEX", "Savings"])
-            for entry in filtered_data:
-                current_opex_val = entry["current"]["opex"]
-                future_opex_val = entry["future"]["opex"]
-                savings = current_opex_val - future_opex_val
-                table_data.append({
-                    "Year": entry["year"],
-                    "Blend %": f"{entry['blend_percentage'] * 100:.1f}%",
-                    "Current OPEX": f"€{current_opex_val:,.2f}",
-                    "Future OPEX": f"€{future_opex_val:,.2f}",
-                    "Savings": f"€{savings:,.2f}"
-                })
-        else:
-            view_prefix = "Future " if view_type == "future" else "Current "
-            headers.extend([f"{view_prefix}OPEX", f"{view_prefix}Compliance", f"{view_prefix}EU ETS", f"{view_prefix}Penalty"])
-            for entry in filtered_data:
-                dv = entry[view_type]
-                table_data.append({
-                    "Year": entry["year"],
-                    "Blend %": f"{entry['blend_percentage'] * 100:.1f}%",
-                    f"{view_prefix}OPEX": f"€{dv['opex']:,.2f}",
-                    f"{view_prefix}Compliance": f"€{dv['compliance_balance']:,.2f}",
-                    f"{view_prefix}EU ETS": f"€{dv['eu_ets']:,.2f}",
-                    f"{view_prefix}Penalty": f"€{dv['penalty']:,.2f}"
-                })
-        
+
+        # 10) Metrics Table
+        table_rows = [{
+            "Year":       r["year"],
+            "Blend %":    f"{r['blend_percentage']*100:.1f}%",
+            "OPEX":       f"€{r['opex']:,.2f}",
+            "Compliance": f"€{r['compliance_balance']:,.2f}",
+            "EU ETS":     f"€{r['eu_ets']:,.2f}",
+            "Penalty":    f"€{r['penalty']:,.2f}"
+        } for r in filtered]
+
         metrics_table = dash_table.DataTable(
-            id='dashboard-data-table',
-            columns=[{"name": col, "id": col} for col in headers],
-            data=table_data,
-            style_table={'overflowX': 'auto'},
-            style_cell={
-                'textAlign': 'right',
-                'padding': '12px',
-                'minWidth': '100px'
-            },
-            style_header={
-                'backgroundColor': 'rgb(230, 230, 230)',
-                'fontWeight': 'bold',
-                'textAlign': 'center'
-            },
-            style_data_conditional=[
-                {'if': {'column_id': 'Year'}, 'textAlign': 'center'},
-                {'if': {'column_id': 'Blend %'}, 'textAlign': 'center'},
-                {'if': {'column_id': 'Savings'}, 'color': 'green'}
-            ]
+            columns=[{"name": c, "id": c} for c in ["Year","Blend %","OPEX","Compliance","EU ETS","Penalty"]],
+            data=table_rows,
+            style_table={'overflowX':'auto'},
+            style_cell={'textAlign':'right','padding':'12px'},
+            style_header={'backgroundColor':'rgb(230,230,230)','fontWeight':'bold'}
         )
-        
-        formatted_avg_opex = f"€{avg_opex:,.0f}"
-        formatted_compliance = f"€{avg_compliance:,.0f}"
-        formatted_penalty = f"€{penalty_reduction:,.0f}"
-        formatted_blend = f"{avg_blend * 100:.1f}%"
-        if view_type == "both" and total_savings is not None:
-            formatted_penalty += f" ({total_savings:,.0f} total savings)"
-        
+
         return (
-            formatted_avg_opex, 
-            opex_trend,
-            formatted_compliance, 
-            compliance_status,
-            formatted_penalty, 
-            f"{penalty_percentage:.1f}% reduction",
-            formatted_blend, 
-            blend_trend,
-            opex_fig, 
-            compliance_fig, 
-            cost_breakdown_fig, 
-            eu_ets_fig,
+            # KPIs
+            f"€{avg_opex:,.0f}", opex_trend,
+            f"€{avg_compliance:,.0f}", compliance_stat,
+            f"€{latest_penalty:,.0f}", "N/A",
+            f"{avg_blend*100:.1f}%", blend_trend,
+            # Figures
+            opex_fig, penalty_fig, comp_fig, cb_fig, ets_fig,
+            # Table + breakdown-year controls
             metrics_table,
             [{"label": str(y), "value": y} for y in unique_years],
-            selected_cb_year
+            sel_year
         )
 
     
