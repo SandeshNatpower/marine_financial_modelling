@@ -939,10 +939,24 @@ def get_opex_comparison_table_year(api_data, currency):
     # Use a dash string for missing breakdown values.
     dash_val = "–"
 
-    # Extract conventional yearly OPEX values.
+    
+    current_fuel_price_year = (api_data.get("current_table", {}).get("fuel_price_year") or [{}])[0]
+    current_maintenance_year = (api_data.get("current_table", {}).get("fuel_price_year") or [{}])[0]
+    current_spares_year = (api_data.get("current_table", {}).get("fuel_price_year") or [{}])[0]
+    current_euets_year = (api_data.get("current_table", {}).get("ets_penalty") or [{}])[0]
+    current_fueleu_year = (api_data.get("current_table", {}).get("fueleu_penalty") or [{}])[0]
     current_opex = (api_data.get("current_table", {}).get("opex_year") or [{}])[0]
-    # Extract future yearly OPEX values.
+    
+    future_fuel_price_year = (api_data.get("future_output_table", {}).get("fuel_price_year") or [{}])[0]
+    future_maintenance_year = (api_data.get("future_output_table", {}).get("fuel_price_year") or [{}])[0]
+    future_spares_year = (api_data.get("future_output_table", {}).get("fuel_price_year") or [{}])[0]
+    future_euets_year = (api_data.get("future_output_table", {}).get("ets_penalty") or [{}])[0]
+    future_fueleu_year = (api_data.get("future_output_table", {}).get("fueleu_penalty") or [{}])[0]
     future_opex = (api_data.get("future_output_table", {}).get("opex_year") or [{}])[0]
+    
+    
+    
+    
 
     # Extract savings breakdown values from the yearly table.
     # (If the "opex_table_year" object does not exist, default to zero values.)
@@ -955,36 +969,36 @@ def get_opex_comparison_table_year(api_data, currency):
     rows = [
         {
             "metric": "Fuel / electricity",
-            "conv": dash_val,
-            "fut": dash_val,
+            "conv": current_fuel_price_year.get("avg_fuel_price_year", 0),
+            "fut": future_fuel_price_year.get("future_avg_fuel_price_year", 0),
             "savings": savings_obj.get("savings_fuel_price_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_fuel_price_year", 0)
         },
         {
             "metric": "Maintenance",
-            "conv": dash_val,
-            "fut": dash_val,
+            "conv": current_maintenance_year.get("avg_engine_maintenance_costs_year", 0),
+            "fut": future_maintenance_year.get("future_avg_engine_maintenance_costs_year", 0),
             "savings": savings_obj.get("savings_maintenance_cost_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_maintenance_cost_year", 0)
         },
         {
             "metric": "Spares / consumables",
-            "conv": dash_val,
-            "fut": dash_val,
+            "conv": current_spares_year.get("spares_consumables_costs_year", 0),
+            "fut": future_spares_year.get("future_spares_consumables_costs_year", 0),
             "savings": savings_obj.get("savings_spare_cost_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_spare_cost_year", 0)
         },
         {
             "metric": "EU ETS",
-            "conv": dash_val,
-            "fut": dash_val,
+            "conv": current_euets_year.get("current_eu_ets_year", 0),
+            "fut": future_euets_year.get("future_eu_ets_year", 0),
             "savings": savings_obj.get("savings_eu_ets_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_eu_ets_year", 0)
         },
         {
             "metric": "FuelEU",
-            "conv": dash_val,
-            "fut": dash_val,
+            "conv": current_fueleu_year.get("total_fueleu_year", 0),
+            "fut": future_fueleu_year.get("future_total_fueleu_year", 0),
             "savings": savings_obj.get("savings_fuel_eu_year", 0),
             "savings_perc": savings_perc_obj.get("perc_savings_fuel_eu_year", 0)
         },

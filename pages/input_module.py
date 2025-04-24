@@ -259,7 +259,7 @@ def get_places_summary_table(vessel_data):
         'percent_of_total': '% of Total',
         'idle_days': 'Idle Days',
         'working_days': 'Working Days',
-        'mwh_per_working_day': 'MWh/Working Day'
+        'mwh_per_working_day': 'Cold Ironing MWh/Working Day'
     })
 
     # 4. Build the DataTable

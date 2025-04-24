@@ -496,7 +496,7 @@ def financial_metrics_layout():
                                     dcc.Checklist(
                                         id="dashboard-chart-selector",
                                         options=chart_options,
-                                        value=["metric"],  # default to metric comparison
+                                        value=["metric", "min_future_opex","dwelling", "single_year"],  # default to metric comparison
                                         inline=True,
                                         inputStyle={"margin-right": "5px", "margin-left": "10px"},
                                     ),
@@ -666,15 +666,6 @@ def multi_chart_dashboard_layout():
 
             dbc.Row([
                 dbc.Col(dbc.Card([
-                    dbc.CardHeader("Compliance Balance Trend"),
-                    dbc.CardBody(dcc.Graph(
-                        id="dashboard-compliance-chart",
-                        config={'displayModeBar': False},
-                        className="dashboard-chart"
-                    ))
-                ]), md=6, xs=12, className="mb-3"),
-
-                dbc.Col(dbc.Card([
                     dbc.CardHeader("EU ETS Impact"),
                     dbc.CardBody(dcc.Graph(
                         id="dashboard-eu-ets-chart",
@@ -682,16 +673,16 @@ def multi_chart_dashboard_layout():
                         className="dashboard-chart"
                     ))
                 ]), md=6, xs=12, className="mb-3"),
+                
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Penalty Trend"),
+                    dbc.CardBody(dcc.Graph(
+                        id="dashboard-penalty-trend",
+                        config={'displayModeBar': False},
+                        className="dashboard-chart"
+                    ))
+                ]), md=6, xs=12, className="mb-3"),    
             ]),
-
-            dbc.Row(dbc.Col(dbc.Card([
-                dbc.CardHeader("Penalty Trend"),
-                dbc.CardBody(dcc.Graph(
-                    id="dashboard-penalty-trend",
-                    config={'displayModeBar': False},
-                    className="dashboard-chart"
-                ))
-            ]), md=6, xs=12, className="mb-3")),
 
             # Metrics Table
             dbc.Row(dbc.Col(dbc.Card([

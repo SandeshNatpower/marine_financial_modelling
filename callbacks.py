@@ -536,13 +536,13 @@ def register_callbacks(app):
             if not dashboard_data:
                 raise PreventUpdate
             scenario_options = [{"label": k, "value": k} for k in dashboard_data.keys()]
-            default_value = scenario_options[0]["value"] if scenario_options else None
+            default_value = scenario_options[2]["value"] if scenario_options else None
             return scenario_options, default_value
         elif triggered_id == "scenario-filter":
             if not selected_scenarios or len(selected_scenarios) == 0:
                 raise PreventUpdate
             scenario_options = [{"label": scenario, "value": scenario} for scenario in selected_scenarios]
-            default_value = selected_scenarios[0] if selected_scenarios else None
+            default_value = selected_scenarios[2] if selected_scenarios else None
             return scenario_options, default_value
         raise PreventUpdate
 
@@ -702,7 +702,7 @@ def register_callbacks(app):
             return [], []
         scenarios = list(dashboard_data.keys())
         options = [{"label": sc, "value": sc} for sc in scenarios]
-        default_value = scenarios[:2] if len(scenarios) >= 2 else scenarios
+        default_value = scenarios[2:4] if len(scenarios) >= 2 else scenarios
         return options, default_value
 
     @app.callback(
@@ -911,7 +911,6 @@ def register_callbacks(app):
             Output("kpi-blend-trend",   "children"),
             Output("dashboard-opex-trend",       "figure"),
             Output("dashboard-penalty-trend",    "figure"),
-            Output("dashboard-compliance-chart", "figure"),
             Output("dashboard-cost-breakdown",   "figure"),
             Output("dashboard-eu-ets-chart",     "figure"),
             Output("dashboard-metrics-table",    "children"),
@@ -943,7 +942,7 @@ def register_callbacks(app):
                 "N/A", "No data",
                 "N/A", "No data",
                 "N/A", "No data",
-                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig,
+                empty_fig, empty_fig, empty_fig, empty_fig,
                 html.Div("No data available", className="text-center"),
                 [], None
             )
@@ -959,7 +958,7 @@ def register_callbacks(app):
                 "N/A", "No data",
                 "N/A", "No data",
                 "N/A", "No data",
-                empty_fig, empty_fig, empty_fig, empty_fig, empty_fig,
+                empty_fig, empty_fig, empty_fig, empty_fig,
                 html.Div("No data for selected years", className="text-center"),
                 [], None
             )
@@ -1078,7 +1077,7 @@ def register_callbacks(app):
             f"€{latest_penalty:,.0f}", "N/A",
             f"{avg_blend*100:.1f}%", blend_trend,
             # Figures
-            opex_fig, penalty_fig, comp_fig, cb_fig, ets_fig,
+            opex_fig, penalty_fig, cb_fig, ets_fig,
             # Table + breakdown-year controls
             metrics_table,
             [{"label": str(y), "value": y} for y in unique_years],
