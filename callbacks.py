@@ -903,12 +903,12 @@ def register_callbacks(app):
         [
             Output("kpi-avg-opex",      "children"),
             Output("kpi-opex-trend",    "children"),
-            Output("kpi-compliance",    "children"),
-            Output("kpi-compliance-status", "children"),
+            Output("kpi-fuel-price",    "children"),
+            Output("kpi-fuel-price-status", "children"),
             Output("kpi-penalty",       "children"),
             Output("kpi-penalty-savings","children"),
-            Output("kpi-blend",         "children"),
-            Output("kpi-blend-trend",   "children"),
+            Output("kpi-euets",         "children"),
+            Output("kpi-euets-trend",   "children"),
             Output("dashboard-opex-trend",       "figure"),
             Output("dashboard-penalty-trend",    "figure"),
             Output("dashboard-cost-breakdown",   "figure"),
@@ -964,23 +964,25 @@ def register_callbacks(app):
             )
 
         # 3) Extract time series
-        years      = [r["year"]               for r in filtered]
-        opex       = [r["opex"]               for r in filtered]
-        compliance = [r["compliance_balance"] for r in filtered]
-        eu_ets     = [r["eu_ets"]             for r in filtered]
-        penalty    = [r["penalty"]            for r in filtered]
-        blend_pct  = [r["blend_percentage"]   for r in filtered]
+        years      = [r["year"]       for r in filtered]
+        opex       = [r["opex"]       for r in filtered]
+        fuel_price = [r["fuel_price"] for r in filtered]
+        eu_ets     = [r["eu_ets"]     for r in filtered]
+        penalty    = [r["penalty"]    for r in filtered]
+        eu_ets     = [r["eu_ets"]     for r in filtered]
 
         # 4) Compute KPIs
         avg_opex        = sum(opex) / len(opex)
         opex_trend      = "Increasing" if opex[-1] > opex[0] else "Decreasing"
-        avg_compliance  = sum(compliance) / len(compliance)
-        compliance_stat = "Positive" if avg_compliance > 0 else "Negative"
+        avg_fuel_price  = sum(fuel_price) / len(fuel_price)
+        fuel_price_stat = "Increasing" if fuel_price[-1] > fuel_price[0] else "Decreasing"
+        avg_penalty  = sum(penalty) / len(penalty) if penalty else 0
+        penalty_trend = "Increasing" if penalty[-1] > penalty[0] else "Decreasing"
         latest_penalty  = penalty[-1]
-        avg_blend       = sum(blend_pct) / len(blend_pct)
-        blend_trend     = (
-            "Increasing"  if blend_pct[-1] > blend_pct[0] else
-            "Stable"      if blend_pct[-1] == blend_pct[0] else
+        avg_eu_ets       = sum(eu_ets) / len(eu_ets)
+        euets_trend     = (
+            "Increasing"  if eu_ets[-1] > eu_ets[0] else
+            "Stable"      if eu_ets[-1] == eu_ets[0] else
             "Decreasing"
         )
 
@@ -1007,12 +1009,12 @@ def register_callbacks(app):
             delta = flat * 0.1 if flat else 1
             penalty_fig.update_yaxes(range=[flat - delta, flat + delta])
 
-        # 7) Compliance Trend
+        # 7) fuel_price Trend
         comp_fig = go.Figure().add_trace(go.Scatter(
-            x=years, y=compliance, mode='lines+markers', name='Compliance'
+            x=years, y=fuel_price, mode='lines+markers', name='fuel_price'
         ))
         comp_fig.update_layout(
-            xaxis_title='Year', yaxis_title='Compliance (€)',
+            xaxis_title='Year', yaxis_title='fuel_price (€)',
             template='plotly_white', height=350
         )
 
@@ -1057,13 +1059,13 @@ def register_callbacks(app):
             "Year":       r["year"],
             "Blend %":    f"{r['blend_percentage']*100:.1f}%",
             "OPEX":       f"€{r['opex']:,.2f}",
-            "Compliance": f"€{r['compliance_balance']:,.2f}",
+            "fuel_price": f"€{r['fuel_price']:,.2f}",
             "EU ETS":     f"€{r['eu_ets']:,.2f}",
             "Penalty":    f"€{r['penalty']:,.2f}"
         } for r in filtered]
 
         metrics_table = dash_table.DataTable(
-            columns=[{"name": c, "id": c} for c in ["Year","Blend %","OPEX","Compliance","EU ETS","Penalty"]],
+            columns=[{"name": c, "id": c} for c in ["Year","Blend %","OPEX","fuel_price","EU ETS","Penalty"]],
             data=table_rows,
             style_table={'overflowX':'auto'},
             style_cell={'textAlign':'right','padding':'12px'},
@@ -1073,9 +1075,9 @@ def register_callbacks(app):
         return (
             # KPIs
             f"€{avg_opex:,.0f}", opex_trend,
-            f"€{avg_compliance:,.0f}", compliance_stat,
-            f"€{latest_penalty:,.0f}", "N/A",
-            f"{avg_blend*100:.1f}%", blend_trend,
+            f"€{avg_fuel_price:,.0f}", fuel_price_stat,
+            f"€{avg_penalty:,.0f}", penalty_trend,
+            f"{avg_eu_ets:,.0f}", euets_trend,
             # Figures
             opex_fig, penalty_fig, cb_fig, ets_fig,
             # Table + breakdown-year controls

@@ -436,8 +436,7 @@ def financial_metrics_layout():
                                             {"label": "Fuel Price",          "value": "fuel_price"},
                                             {"label": "Maintenance",         "value": "maintenance"},
                                             {"label": "Penalty",             "value": "penalty"},
-                                            {"label": "Spare",               "value": "spare"},
-                                            {"label": "Compliance Balance",  "value": "compliance_balance"}
+                                            {"label": "Spare",               "value": "spare"}
                                             
                                         ],
                                         value="opex",
@@ -602,27 +601,17 @@ def multi_chart_dashboard_layout():
             # KPI Cards Row
             dbc.Row([
                 dbc.Col(dbc.Card(dbc.CardBody(html.Div([
-                    html.H5("Avg. OPEX", className="card-title text-center"),
-                    html.I(className="bi bi-currency-euro",
-                           style={"fontSize": "1.5rem","color": "#1F77B4"}),
-                    html.H3(id="kpi-avg-opex",
-                            className="text-center text-primary"),
-                    html.P(id="kpi-opex-trend",
-                           className="text-center", style={"fontSize": "0.8rem"})
-                ]))), md=3, xs=6),
-
-                dbc.Col(dbc.Card(dbc.CardBody(html.Div([
-                    html.H5("Compliance Balance", className="card-title text-center"),
+                    html.H5("Fuel Price", className="card-title text-center"),
                     html.I(className="bi bi-bar-chart-line",
                            style={"fontSize": "1.5rem","color": "#2CA02C"}),
-                    html.H3(id="kpi-compliance",
+                    html.H3(id="kpi-fuel-price",
                             className="text-center text-success"),
-                    html.P(id="kpi-compliance-status",
+                    html.P(id="kpi-fuel-price-status",
                            className="text-center", style={"fontSize": "0.8rem"})
                 ]))), md=3, xs=6),
 
                 dbc.Col(dbc.Card(dbc.CardBody(html.Div([
-                    html.H5("Penalty", className="card-title text-center"),
+                    html.H5("Fuel-EU Penalty", className="card-title text-center"),
                     html.I(className="bi bi-graph-up",
                            style={"fontSize": "1.5rem","color": "#D62728"}),
                     html.H3(id="kpi-penalty",
@@ -632,16 +621,25 @@ def multi_chart_dashboard_layout():
                 ]))), md=3, xs=6),
 
                 dbc.Col(dbc.Card(dbc.CardBody(html.Div([
-                    html.H5("Blend Percentage",
-                            className="card-title text-center"),
+                    html.H5("EU ETS Penalty", className="card-title text-center"),
                     html.I(className="bi bi-pie-chart",
                            style={"fontSize": "1.5rem","color": "#17A2B8"}),
-                    html.H3(id="kpi-blend",
+                    html.H3(id="kpi-euets",
                             className="text-center text-info"),
-                    html.P(id="kpi-blend-trend",
+                    html.P(id="kpi-euets-trend",
+                           className="text-center", style={"fontSize": "0.8rem"})
+                ]))), md=3, xs=6),
+                                dbc.Col(dbc.Card(dbc.CardBody(html.Div([
+                    html.H5("Avg. OPEX", className="card-title text-center"),
+                    html.I(className="bi bi-currency-euro",
+                           style={"fontSize": "1.5rem","color": "#1F77B4"}),
+                    html.H3(id="kpi-avg-opex",
+                            className="text-center text-primary"),
+                    html.P(id="kpi-opex-trend",
                            className="text-center", style={"fontSize": "0.8rem"})
                 ]))), md=3, xs=6),
             ], className="mb-4"),
+            
 
             # Charts
             dbc.Row([
