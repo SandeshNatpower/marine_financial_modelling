@@ -11,6 +11,7 @@ DASHBOARD_ENDPOINT = f"{API_BASE}/financialmodellingscenarios"
 # Default Vessel Data with Extended Engine and Operational Parameters
 DEFAULT_VESSEL = {
     "imo": 9803613,
+    "vessel_id": 48217,
     "vessel_name": "MSC GRANDIOSA",
     "vessel_category": "Cruise ships",
     "gross_tonnage": 181541,

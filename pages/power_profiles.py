@@ -254,12 +254,27 @@ def min_future_opex_figure(dashboard_data=None, year_range=(2025, 2050)):
 
 
 
-def create_range_stacked_bar(dashboard_data, year_range=(2025, 2050)):
+import plotly.graph_objects as go
+
+def create_range_stacked_bar(
+    dashboard_data,
+    year_range=(2025, 2050),
+    currency_symbol="€",
+    conversion_rate=1.0
+):
     """
-    For the given year_range, build a horizontal stacked‐bar of all cost components
-    aggregated across that range, for each scenario.
-    Hover shows Scenario, Component, and Value.
-    Components are stacked from largest to smallest.
+    Build a horizontal stacked‐bar of all cost components aggregated
+    across the given year_range, for each scenario. Each bar segment
+    shows its value directly, and hovering still gives details.
+
+    Args:
+        dashboard_data (dict): { scenario_name: [ {year, fuel_price, ...}, ... ], ... }
+        year_range (tuple): (start_year, end_year)
+        currency_symbol (str): e.g. "€", "$"
+        conversion_rate (float): multiply raw values by this to convert into target currency
+
+    Returns:
+        plotly.graph_objs.Figure
     """
     components = {
         "Fuel":        "fuel_price",
@@ -278,56 +293,81 @@ def create_range_stacked_bar(dashboard_data, year_range=(2025, 2050)):
 
     start, end = year_range
 
-    # aggregate
+    # 1) aggregate per scenario
     aggregated = {}
     for scenario, records in dashboard_data.items():
-        sums = {c: 0 for c in components}
+        sums = {c: 0.0 for c in components}
         for rec in records:
             yr = rec.get("year")
             if yr is None or yr < start or yr > end:
                 continue
-            for name, key in components.items():
-                sums[name] += rec.get(key, 0)
-        if any(v for v in sums.values()):
+            for comp_name, key in components.items():
+                raw = rec.get(key, 0) or 0
+                sums[comp_name] += raw * conversion_rate
+        if any(v != 0 for v in sums.values()):
             aggregated[scenario] = sums
 
+    # 2) handle empty
     if not aggregated:
         return go.Figure().update_layout(
             title=f"No data between {start} and {end}"
         )
 
-    scenarios = sorted(aggregated.keys(), key=lambda sc: sum(aggregated[sc].values()), reverse=True)
-    
-    # Calculate component totals across all scenarios
-    component_totals = {comp: sum(aggregated[s][comp] for s in scenarios) for comp in components}
-    
-    # Sort components by total size (largest first)
-    sorted_components = sorted(components.keys(), key=lambda c: component_totals[c], reverse=True)
-    
-    fig = go.Figure()
-    # Add traces in order from largest to smallest component
-    for comp_name in sorted_components:
-        fig.add_trace(go.Bar(
-            y=scenarios,
-            x=[aggregated[s][comp_name] for s in scenarios],
-            name=comp_name,
-            orientation="h",
-            marker_color=colors[comp_name],
-            hovertemplate=(
-                "Scenario: %{y}<br>"
-                f"{comp_name}: €%{{x:,.0f}}<extra></extra>"
-            )
-        ))
+    # 3) sort scenarios by total
+    scenarios = sorted(
+        aggregated.keys(),
+        key=lambda sc: sum(aggregated[sc].values()),
+        reverse=True
+    )
 
+    # 4) rank components by total across all scenarios
+    comp_totals = {
+        comp: sum(aggregated[sc][comp] for sc in scenarios)
+        for comp in components
+    }
+    sorted_comps = sorted(
+        components.keys(),
+        key=lambda c: comp_totals[c],
+        reverse=True
+    )
+
+    # 5) build traces with text displayed
+    fig = go.Figure()
+    for comp in sorted_comps:
+        values = [aggregated[sc][comp] for sc in scenarios]
+        fig.add_trace(
+            go.Bar(
+                y=scenarios,
+                x=values,
+                name=comp,
+                orientation="h",
+                marker_color=colors[comp],
+                text=[f"{currency_symbol}{v:,.0f}" for v in values],
+                textposition="auto",
+                hovertemplate=(
+                    "Scenario: %{y}<br>"
+                    f"{comp}: {currency_symbol}%{{x:,.0f}}<extra></extra>"
+                )
+            )
+        )
+
+    # 6) tidy up layout
     fig.update_layout(
         barmode="stack",
         hovermode="y unified",
         title=f"Cost Breakdown per Scenario ({start}–{end})",
-        xaxis_title="Cost (€)",
-        yaxis_title="Scenario",
-        margin=dict(l=140, r=40, t=60, b=50)
+        xaxis=dict(
+            title="Cost",
+            tickprefix=currency_symbol,
+            hoverformat=", .0f"
+        ),
+        yaxis=dict(title="Scenario"),
+        margin=dict(l=140, r=40, t=60, b=50),
+        legend=dict(title="Component")
     )
+
     return fig
+
 
 def generate_metric_figure(metric, year_range, selected_scenarios, dashboard_data=None):
     """

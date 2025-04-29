@@ -209,7 +209,7 @@ def get_current_output_table(api_data, currency):
     table_body = html.Tbody([
         # Block 1: Power & Energy
         html.Tr([
-            html.Td("Max. power"),
+            html.Td("Average power"),
             html.Td("kW"),
             html.Td(format_number(sailing_power)),
             html.Td(format_number(working_power)),
@@ -443,7 +443,7 @@ def get_future_output_table(api_data, currency):
     working_energy = energy_data.get("working_energy_req_kwh_day", 276480)
     idle_energy    = energy_data.get("idle_energy_req_kwh_day", 19150)
     shore_energy   = energy_data.get("shore_energy_req_kwh_day", 0)
-    avg_energy     = int((sailing_energy + working_energy + idle_energy + shore_energy) / 4.0)
+    avg_energy     = energy_data.get("shore_power_req_day", 0)
 
     # Average SFC Data
     sfc_data = (future.get("average_sfc") or [{}])[0]
@@ -457,15 +457,15 @@ def get_future_output_table(api_data, currency):
     sailing_fuel_kg = kg_data.get("sailing_fuel_consumption_kg", 87889)
     working_fuel_kg = kg_data.get("working_fuel_consumption_kg", 61033)
     idle_fuel_kg    = kg_data.get("idle_fuel_consumption_kg", 3859)
-    shore_fuel_kg   = kg_data.get("avg_shore_fuel_consumption_day", 0)
-    avg_fuel_kg     = int((sailing_fuel_kg + working_fuel_kg + idle_fuel_kg + shore_fuel_kg) / 4.0)
+    shore_fuel_kg   = kg_data.get("-")
+    avg_fuel_kg     = kg_data.get("avg_shore_fuel_consumption_day", 101560)
 
     # Fuel consumption in liters
     fuel_data = (future.get("fuel_consumption_liters") or [{}])[0]
     sailing_fuel_l = fuel_data.get("future_sailing_fuel_consumption_liter", 99761)
     working_fuel_l = fuel_data.get("future_working_fuel_consumption_liter", 69277)
     idle_fuel_l    = fuel_data.get("future_idle_fuel_consumption_liter", 4336)
-    shore_fuel_l   = 0  # Assume 0
+    shore_fuel_l   = "-"  # Assume 0
     avg_fuel_l     = fuel_data.get("future_avg_fuel_consumption_liter_day", 63479)
 
     # Fuel consumption in kWh (using energy requirement values)
@@ -582,7 +582,7 @@ def get_future_output_table(api_data, currency):
     table_body = html.Tbody([
         # Max. power
         html.Tr([
-            html.Td("Max. power"),
+            html.Td("Average power"),
             html.Td("kW"),
             html.Td(format_number(sailing_power)),
             html.Td(format_number(working_power)),
@@ -747,7 +747,7 @@ def get_future_output_table(api_data, currency):
             html.Td(format_number(future_euets_data)),
             html.Td(format_number(future_euets_data)),
             html.Td(format_number(future_euets_data)),
-            html.Td(format_number(future_euets_data)),
+            html.Td("0"),
             html.Td(format_number(future_euets_data))
         ]),
         # FuelEU row

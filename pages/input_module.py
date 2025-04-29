@@ -192,13 +192,16 @@ def get_vessel_image_path(vessel_type):
 def get_places_summary_table(vessel_data):
     import pandas as pd
     from dash import html, dash_table
+
     """
     Generate a Dash HTML layout showing:
       - A title header
-      - A DataTable with columns for Port Name, Energy (MWh), % of Total, Idle Days, Working Days, and MWh/Working Day.
-    
+      - A DataTable with columns for Port Name, Energy (MWh), % of Total,
+        Idle Days, Working Days, and MWh/Working Day.
+
     Args:
-        vessel_data (dict or list): The vessel data that contains 'places_summary' or is a list of place dicts.
+        vessel_data (dict or list): The vessel data that contains
+        'places_summary' or is itself a list of place dicts.
 
     Returns:
         html.Div: A Dash HTML layout containing the table.
@@ -211,10 +214,14 @@ def get_places_summary_table(vessel_data):
         places_data = vessel_data
     else:
         places_data = []
-    
+
+    # FIX: if places_data is a single dict, wrap it into a list
+    if isinstance(places_data, dict):
+        places_data = [places_data]
+
     # Convert to DataFrame
     df = pd.DataFrame(places_data)
-    
+
     # If empty, return a "no data" layout
     if df.empty:
         return html.Div([
@@ -222,37 +229,39 @@ def get_places_summary_table(vessel_data):
         ])
 
     # 2. Prepare data for table
-    # Ensure numeric columns are recognized
     numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-    
+
     # Round numeric columns to 2 decimals
     for col in numeric_cols:
         df[col] = df[col].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
-    
+
     # Calculate total energy for later percentage computation
     total_energy = df['total_ci_mwh'].sum()
-    
+
     # Create new columns for display:
-    #   % of Total, MWh/Working Day
     df['percent_of_total'] = df['total_ci_mwh'] / total_energy * 100
     df['mwh_per_working_day'] = df.apply(
-        lambda row: row['total_ci_mwh'] / row['working_days'] 
-                    if (row.get('working_days') and row['working_days'] != 0) else None, 
+        lambda row: row['total_ci_mwh'] / row['working_days']
+        if (row.get('working_days') and row['working_days'] != 0) else None,
         axis=1
     )
 
     # Round these new columns as well
-    df['percent_of_total'] = df['percent_of_total'].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
-    df['mwh_per_working_day'] = df['mwh_per_working_day'].apply(lambda x: round(x, 2) if pd.notnull(x) else x)
+    df['percent_of_total'] = df['percent_of_total'].apply(
+        lambda x: round(x, 2) if pd.notnull(x) else x
+    )
+    df['mwh_per_working_day'] = df['mwh_per_working_day'].apply(
+        lambda x: round(x, 2) if pd.notnull(x) else x
+    )
 
-    # 3. Reorder and rename columns for a friendlier display
-    df_display = df[[ 
-        'port_name',         # 1
-        'total_ci_mwh',      # 2
-        'percent_of_total',  # 3
-        'idle_days',         # 4
-        'working_days',      # 5
-        'mwh_per_working_day'# 6
+    # 3. Reorder and rename columns
+    df_display = df[[
+        'port_name',
+        'total_ci_mwh',
+        'percent_of_total',
+        'idle_days',
+        'working_days',
+        'mwh_per_working_day'
     ]].rename(columns={
         'port_name': 'Port Name',
         'total_ci_mwh': 'Energy (MWh)',
@@ -264,16 +273,15 @@ def get_places_summary_table(vessel_data):
 
     # 4. Build the DataTable
     columns = [
-        {"name": "Port Name",         "id": "Port Name",         "type": "text"},
-        {"name": "Energy (MWh)",      "id": "Energy (MWh)",      "type": "numeric"},
-        {"name": "% of Total",        "id": "% of Total",        "type": "numeric"},
-        {"name": "Idle Days",         "id": "Idle Days",         "type": "numeric"},
-        {"name": "Working Days",      "id": "Working Days",      "type": "numeric"},
-        {"name": "Cold Ironing MWh/Working Day",   "id": "MWh/Working Day",   "type": "numeric"},
+        {"name": "Port Name", "id": "Port Name", "type": "text"},
+        {"name": "Energy (MWh)", "id": "Energy (MWh)", "type": "numeric"},
+        {"name": "% of Total", "id": "% of Total", "type": "numeric"},
+        {"name": "Idle Days", "id": "Idle Days", "type": "numeric"},
+        {"name": "Working Days", "id": "Working Days", "type": "numeric"},
+        {"name": "Cold Ironing MWh/Working Day", "id": "MWh/Working Day", "type": "numeric"},
     ]
-    
-    # Right-align numeric columns
-    numeric_cols_conditional = [
+
+    numeric_cond = [
         {'if': {'column_id': c}, 'textAlign': 'right'}
         for c in ["Energy (MWh)", "% of Total", "Idle Days", "Working Days", "MWh/Working Day"]
     ]
@@ -284,15 +292,11 @@ def get_places_summary_table(vessel_data):
         page_size=10,
         sort_action="native",
         filter_action="native",
-        style_table={
-            'width': '100%',
-            'overflowX': 'auto'
-        },
+        style_table={'width': '100%', 'overflowX': 'auto'},
         style_header={
             'backgroundColor': '#0A4B8C',
             'fontWeight': 'bold',
             'color': 'white',
-            'whiteSpace': 'normal',
             'textAlign': 'center'
         },
         style_cell={
@@ -302,23 +306,17 @@ def get_places_summary_table(vessel_data):
             'height': 'auto',
             'minWidth': '70px',
             'maxWidth': '120px',
-            'fontSize': '20px'  # Increased font size
+            'fontSize': '20px'
         },
-        style_cell_conditional=numeric_cols_conditional,
+        style_cell_conditional=numeric_cond,
         style_data_conditional=[
-            {
-                'if': {'row_index': 'odd'},
-                'backgroundColor': 'rgb(248, 248, 248)'
-            }
+            {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
         ]
     )
 
-    # 5. Construct the layout with title and table (summary statistics removed)
-    layout = html.Div([
-        data_table
-    ], style={"margin": "20px"})
-    
-    return layout
+    # 5. Wrap in a Div
+    return html.Div([data_table], style={"margin": "20px"})
+
 
 
 
@@ -444,7 +442,7 @@ def layout():
                                                         id="imo-number",
                                                         value=DEFAULT_VESSEL["imo"],
                                                         input_type="number",
-                                                        col_size=6,
+                                                        col_size=4,
                                                         editable=True,
                                                         info_text="IMO/MMSI number"
                                                     ),
@@ -453,10 +451,20 @@ def layout():
                                                         id="vessel-category",
                                                         value=DEFAULT_VESSEL["vessel_category"],
                                                         input_type="text",
-                                                        col_size=6,
+                                                        col_size=4,
                                                         editable=True,
                                                         info_text="Vessel category"
                                                     ),
+                                                    create_input_group(
+                                                        label="Vessel ID",
+                                                        id="vessel-id",
+                                                        value=DEFAULT_VESSEL["vessel_id"],
+                                                        input_type="text",
+                                                        col_size=4,
+                                                        editable=True,
+                                                        info_text="Vessel ID"
+                                                    ),
+                                                    
                                                 ],
                                                 className="mb-3"
                                             ),
