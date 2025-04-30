@@ -25,13 +25,13 @@ DEFAULT_VESSEL = {
     "displacement": 0,  # Tons; consider updating with actual data if available
     "main_engine_type": "4-Stroke",
     "aux_engine_type": "4-Stroke",
-    "total_engine_power": 38400,  # kW
-    "shore_power_kw": 2020,  # kW
-    "main_engine_power_kw": 38400,  # kW
-    "aux_engine_power_kw": 2020,  # kW
+    "total_engine_power": 10400,  # kW
+    "shore_power_kw": 2246,  # kW
+    "main_engine_power_kw": 10400,  # kW
+    "aux_engine_power_kw": 2246,  # kW
     "sailing_engine_load": 50,  # Fraction (0-1)
     "working_engine_load": 30,  # Fraction (0-1)
-    "shore_engine_load": 39.5,  # Fraction (0-1)
+    "shore_engine_load": 40,  # Fraction (0-1)
     "sailing_days": 199,  # Days per year
     "working_days": 40,  # Days per year
     "idle_days": 126,  # Days per year

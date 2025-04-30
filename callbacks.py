@@ -102,11 +102,11 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
     
     params = {
         "vessel_id": vessel_data.get("imo", 11111),
-        "main_engine_power_kw": float(vessel_data.get("total_engine_power", 38400)),
-        "aux_engine_power_kw": float(vessel_data.get("average_hoteling_kw", 2020)),
+        "main_engine_power_kw": float(vessel_data.get("total_engine_power", 10400)),
+        "aux_engine_power_kw": float(vessel_data.get("average_hoteling_kw", 2246)),
         "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 50))/100,
         "working_engine_load": float(vessel_data.get("working_engine_load", 30))/100,
-        "shore_engine_load": float(vessel_data.get("shore_engine_load", 39.5))/100,
+        "shore_engine_load": float(vessel_data.get("shore_engine_load", 40))/100,
         "sailing_days": float(vessel_data.get("sailing_days", 0.1)),
         "working_days": float(vessel_data.get("working_days", 0.1)),
         "idle_days": int(vessel_data.get("idle_days", 126)),
@@ -151,8 +151,8 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
 def get_financial_data(input_params=None, vessel_data_override=None):
     fallback_defaults = {
         "vessel_id": 9803613,
-        "main_engine_power_kw": 38400,
-        "aux_engine_power_kw": 2020,
+        "main_engine_power_kw": 10400,
+        "aux_engine_power_kw": 2246,
         "sailing_engine_load": 0.5,
         "working_engine_load": 0.3,
         "shore_engine_load": 0.395,
@@ -329,8 +329,8 @@ def register_callbacks(app):
     )
     def update_technical_specs(vessel_data):
         vessel_data = vessel_data or config.DEFAULT_VESSEL
-        main_power = vessel_data.get("total_engine_power", config.DEFAULT_VESSEL.get("total_engine_power", 38400))
-        aux_power = vessel_data.get("average_hoteling_kw", config.DEFAULT_VESSEL.get("average_hoteling_kw", 2020))
+        main_power = vessel_data.get("total_engine_power", config.DEFAULT_VESSEL.get("total_engine_power", 10400))
+        aux_power = vessel_data.get("average_hoteling_kw", config.DEFAULT_VESSEL.get("average_hoteling_kw", 2246))
         return (
             main_power,
             aux_power,
@@ -446,8 +446,8 @@ def register_callbacks(app):
         vessel_data = merge_vessel_data(vessel_data)
         future_data = future_data or {}
 
-        main_power = vessel_data.get("total_engine_power", 38400)
-        aux_power = vessel_data.get("average_hoteling_kw", 2020)
+        main_power = vessel_data.get("total_engine_power", 10400)
+        aux_power = vessel_data.get("average_hoteling_kw", 2246)
         main_fuel_type = vessel_data.get("main_fuel_type", "MDO")
         aux_fuel_type = vessel_data.get("aux_fuel_type", "MDO")
         sailing_days = vessel_data.get("sailing_days", 199)
@@ -713,7 +713,7 @@ def register_callbacks(app):
             return [], []
         scenarios = list(dashboard_data.keys())
         options = [{"label": sc, "value": sc} for sc in scenarios]
-        default_value = scenarios[2:4] if len(scenarios) >= 2 else scenarios
+        default_value = scenarios[:] if len(scenarios) >= 2 else scenarios
         return options, default_value
 
     @app.callback(
@@ -1339,4 +1339,3 @@ def register_callbacks(app):
         
         return html.Div(sections)
     return app
-
