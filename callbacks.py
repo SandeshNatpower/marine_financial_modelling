@@ -2,6 +2,10 @@ import json
 from dash import dash_table
 import requests
 from urllib.parse import urlencode
+from datetime import datetime
+import pandas as pd
+from dash import html, Input, Output, State, callback_context, exceptions
+from dash.dcc import send_data_frame
 # callbacks.py
 from pages import reporting
 import io
@@ -1100,46 +1104,50 @@ def register_callbacks(app):
 
 
 
-    # 1) Capture config into store
+
+
+    # ─── 1) Capture report configuration ──────────────────────────────────────────
     @app.callback(
         Output("report-config-store", "data"),
         Input("generate-report-btn", "n_clicks"),
         [
             State("report-scope", "value"),
-            State("report-dates", "start_date"),  # Now exists
-            State("report-dates", "end_date"),    # Now exists
+            State("report-dates", "start_date"),
+            State("report-dates", "end_date"),
             State("report-scenarios", "value"),
-            State("report-currency", "value"),    # Now exists
+            State("report-currency", "value"),
         ],
         prevent_initial_call=True
     )
-    def collect_report_config(n, rpt_scope, sd, ed, scenarios, currency):
-        if not n:
-            raise dash.exceptions.PreventUpdate
+    def collect_report_config(n_clicks, scope, start_date, end_date, scenarios, currency):
+        if not n_clicks:
+            raise exceptions.PreventUpdate
         return {
-            "scope": rpt_scope,
-            "start_date": sd,
-            "end_date": ed,
+            "scope": scope,
+            "start_date": start_date,
+            "end_date": end_date,
             "scenarios": scenarios or [],
             "currency": currency
         }
 
-    # 2) Render preview
+
+    # ─── 2) Render preview of selections ──────────────────────────────────────────
     @app.callback(
         Output("report-preview", "children"),
         Input("report-config-store", "data")
     )
     def render_preview(cfg):
         if not cfg:
-            return "Click ‘Generate Report’ to see a preview here."
+            return "Click “Generate Preview” to see your selections here."
         return [
-            html.P(f"**Scope**: {cfg['scope'].upper()}"),
+            html.P(f"**Scope**: {cfg['scope'].title()}"),
             html.P(f"**Period**: {cfg['start_date']} → {cfg['end_date']}"),
-            html.P(f"**Scenarios**: {', '.join(cfg['scenarios']) if cfg['scenarios'] else '— none —'}"),
-            html.P(f"**Currency**: {cfg['currency']}")
+            html.P(f"**Scenarios**: {', '.join(cfg['scenarios']) or '— none —'}"),
+            html.P(f"**Currency**: {cfg['currency']}"),
         ]
 
 
+    # ─── 3) Download combined CSV ────────────────────────────────────────────────
     @app.callback(
         Output("download-report", "data"),
         Input("download-report-btn", "n_clicks"),
@@ -1150,70 +1158,30 @@ def register_callbacks(app):
         ],
         prevent_initial_call=True
     )
-    def download_report(n, report_data, vessel_data, dash_data):
-        if not n or not report_data:
-            raise dash.exceptions.PreventUpdate
-        
-        pdf = reporting.build_pdf(
-            report_scope=report_data.get('scope'),  # Changed key
-            start_date=report_data.get('start_date'),
-            end_date=report_data.get('end_date'),
-            scenarios=report_data.get('scenarios', []),
-            currency=report_data.get('currency'),
-            vessel_data=vessel_data or {},
-            dashboard_data=dash_data or {}
-        )
-        return send_bytes(lambda buf: buf.write(pdf), filename="Decarb_Report.pdf")
+    def download_csv(n_clicks, cfg, vessel_data, dash_data):
+        if not n_clicks or not cfg:
+            raise exceptions.PreventUpdate
 
+        # Combine each selected scenario’s records into one DataFrame
+        dfs = []
+        for scen in cfg["scenarios"]:
+            records = dash_data.get(scen, [])
+            df = pd.DataFrame(records)
+            df["scenario"] = scen
+            dfs.append(df)
 
-    # 4) Email PDF
-    @app.callback(
-        Output("email-status", "children"),
-        Input("send-report-button", "n_clicks"),
-        [
-            State("report-email", "value"),
-            State("report-config-store", "data"),
-            State("vessel-data-store", "data"),
-            State("dashboard-scenarios-store", "data")
-        ],
-        prevent_initial_call=True
-    )
-    def send_report_email(n, to_addr, report_data, vessel_data, dash_data):
-        if not n or not to_addr or not report_data:
-            return "❗ Please enter a valid email and generate a report first."
-        
-        pdf = reporting.build_pdf(
-            report_type=report_data.get('type'),
-            start_date=report_data.get('start_date'),
-            end_date=report_data.get('end_date'),
-            scenarios=report_data.get('scenarios', []),
-            currency=report_data.get('currency'),
-            vessel_data=vessel_data or {},
-            dashboard_data=dash_data or {}
+        if dfs:
+            combined = pd.concat(dfs, ignore_index=True)
+        else:
+            combined = pd.DataFrame([{"note": "No data for selected scenarios"}])
+
+        # Send it as a CSV
+        return send_data_frame(
+            combined.to_csv,
+            filename=f"report_{cfg['scope']}_{datetime.now():%Y%m%d}.csv",
+            index=False
         )
 
-        msg = EmailMessage()
-        msg["Subject"] = "Your Decarbonization Report"
-        msg["From"]    = "no-reply@yourdomain.com"
-        msg["To"]      = to_addr
-        msg.set_content("Please find attached your report.")
-        msg.add_attachment(pdf, maintype="application", subtype="pdf",
-                           filename="Decarb_Report.pdf")
-
-        # ── your SMTP creds ──
-        SMTP_SERVER = "smtp.yourprovider.com"
-        SMTP_PORT   = 587
-        SMTP_USER   = "smtp_user"
-        SMTP_PASS   = "smtp_pass"
-
-        try:
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
-                s.starttls()
-                s.login(SMTP_USER, SMTP_PASS)
-                s.send_message(msg)
-            return f"✅ Report sent to {to_addr}"
-        except Exception as e:
-            return f"❌ Email failed: {e}"
         
 
     @app.callback(
