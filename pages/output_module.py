@@ -1,5 +1,6 @@
 import dash
-from dash import html, dcc
+from dash import html, dcc, dash_table
+from dash.dash_table.Format import Format, Scheme
 import dash_bootstrap_components as dbc
 import config
 import plotly.graph_objects as go
@@ -799,118 +800,92 @@ def get_opex_comparison_table(api_data, currency):
       1) 'conventional' values from api_data["current_table"]
       2) 'future' values from api_data["future_output_table"]
       3) 'savings' & 'savings_perc' from api_data["opex_table"]
+    All None’s are treated as 0 so sums never see a None.
     """
     # 1) Extract Conventional (current) and Future (after measures) values
     conventional = (api_data.get("current_table", {}).get("costs") or [{}])[0]
-    conv_fuel_price = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0].get("avg_fuel_price_day", 0)
-    conv_financing = conventional.get("avg_financing_day", 0)
-    conv_maintenance = conventional.get("avg_engine_maintenance_costs_day", 0)
-    conv_spares = conventional.get("spares_consumables_costs", 0)
-    conv_eu_ets = conventional.get("avg_eu_ets", 0)
-    conv_fuel_eu = conventional.get("avg_fueleu_day", 0)
+    conv_fuel_price    = (api_data.get("current_table", {}).get("fuel_price") or [{}])[0].get("avg_fuel_price_day", 0) or 0
+    conv_financing     = conventional.get("avg_financing_day", 0) or 0
+    conv_maintenance   = conventional.get("avg_engine_maintenance_costs_day", 0) or 0
+    conv_spares        = conventional.get("spares_consumables_costs", 0) or 0
+    conv_eu_ets        = conventional.get("avg_eu_ets", 0) or 0
+    conv_fuel_eu       = conventional.get("avg_fueleu_day", 0) or 0
 
     future = (api_data.get("future_output_table", {}).get("costs") or [{}])[0]
-    fut_fuel_price = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0].get("future_avg_fuel_price_day", 0)
-    fut_financing = future.get("future_avg_financing_day", 0)
-    fut_maintenance = future.get("future_avg_engine_maintenance_costs_day", 0)
-    fut_spares = future.get("future_avg_spares_consumables_costs_day", 0)
-    fut_eu_ets = future.get("future_eu_ets", 0)
-    fut_fuel_eu = future.get("future_avg_fueleu_day", 0)
+    fut_fuel_price     = (api_data.get("future_output_table", {}).get("fuel_price") or [{}])[0].get("future_avg_fuel_price_day", 0) or 0
+    fut_financing      = future.get("future_avg_financing_day", 0) or 0
+    fut_maintenance    = future.get("future_avg_engine_maintenance_costs_day", 0) or 0
+    fut_spares         = future.get("future_avg_spares_consumables_costs_day", 0) or 0
+    fut_eu_ets         = future.get("future_eu_ets", 0) or 0
+    fut_fuel_eu        = future.get("future_avg_fueleu_day", 0) or 0
 
-    # 2) Extract the Savings and Savings_perc from API
+    # 2) Extract the Savings and Savings_perc from API, defaulting None→0
     opex_table = api_data.get("opex_table", {})
-    savings_data = (opex_table.get("Savings") or [{}])[0]
-    savings_perc_data = (opex_table.get("Savings_perc") or [{}])[0]
+    savings_data       = (opex_table.get("Savings")      or [{}])[0]
+    savings_perc_data  = (opex_table.get("Savings_perc") or [{}])[0]
 
-    fuel_elec_savings = savings_data.get("savings_fuel_price", 0)
-    fuel_elec_savings_perc = savings_perc_data.get("perc_savings_fuel_price", 0)
+    fuel_elec_savings        = savings_data.get("savings_fuel_price", 0) or 0
+    fuel_elec_savings_perc   = savings_perc_data.get("perc_savings_fuel_price", 0) or 0
 
-    financing_savings = 0
-    financing_savings_perc = 0
+    financing_savings        = 0
+    financing_savings_perc   = 0
 
-    maintenance_savings = savings_data.get("savings_maintenance_cost", 0)
-    maintenance_savings_perc = savings_perc_data.get("perc_savings_maintenance_cost", 0)
+    maintenance_savings      = savings_data.get("savings_maintenance_cost", 0) or 0
+    maintenance_savings_perc = savings_perc_data.get("perc_savings_maintenance_cost", 0) or 0
 
-    spares_savings = savings_data.get("savings_spare_cost", 0)
-    spares_savings_perc = savings_perc_data.get("perc_savings_spare_cost", 0)
+    spares_savings           = savings_data.get("savings_spare_cost", 0) or 0
+    spares_savings_perc      = savings_perc_data.get("perc_savings_spare_cost", 0) or 0
 
-    eu_ets_savings = savings_data.get("savings_eu_ets")
-    eu_ets_savings_perc = savings_perc_data.get("perc_savings_eu_ets", 0)
+    eu_ets_savings           = savings_data.get("savings_eu_ets", 0) or 0
+    eu_ets_savings_perc      = savings_perc_data.get("perc_savings_eu_ets", 0) or 0
 
-    fueleu_savings = savings_data.get("savings_fuel_eu", 0)
-    fueleu_savings_perc = savings_perc_data.get("perc_savings_fuel_eu", 0)
+    fueleu_savings           = savings_data.get("savings_fuel_eu", 0) or 0
+    fueleu_savings_perc      = savings_perc_data.get("perc_savings_fuel_eu", 0) or 0
 
-    # 3) Build rows
-    rows = [
-        {
-            "metric": "Fuel / electricity",
-            "conv": conv_fuel_price,
-            "fut": fut_fuel_price,
-            "savings": fuel_elec_savings,
-            "savings_perc": fuel_elec_savings_perc
-        },
-        {
-            "metric": "Financing",
-            "conv": conv_financing,
-            "fut": fut_financing,
-            "savings": financing_savings,
-            "savings_perc": financing_savings_perc
-        },
-        {
-            "metric": "Maintenance",
-            "conv": conv_maintenance,
-            "fut": fut_maintenance,
-            "savings": maintenance_savings,
-            "savings_perc": maintenance_savings_perc
-        },
-        {
-            "metric": "Spares / consumables",
-            "conv": conv_spares,
-            "fut": fut_spares,
-            "savings": spares_savings,
-            "savings_perc": spares_savings_perc
-        },
-        {
-            "metric": "EU ETS",
-            "conv": conv_eu_ets,
-            "fut": fut_eu_ets,
-            "savings": eu_ets_savings,
-            "savings_perc": eu_ets_savings_perc
-        },
-        {
-            "metric": "FuelEU",
-            "conv": conv_fuel_eu,
-            "fut": fut_fuel_eu,
-            "savings": fueleu_savings,
-            "savings_perc": fueleu_savings_perc
-        },
-    ]
+    # 3) Build rows, coerce any None→0
+    rows = []
+    for metric, conv, fut, sav, sav_perc in [
+        ("Fuel / electricity", conv_fuel_price, fut_fuel_price, fuel_elec_savings, fuel_elec_savings_perc),
+        ("Financing",          conv_financing,   fut_financing,   financing_savings, financing_savings_perc),
+        ("Maintenance",        conv_maintenance, fut_maintenance, maintenance_savings, maintenance_savings_perc),
+        ("Spares / consumables", conv_spares,     fut_spares,      spares_savings,   spares_savings_perc),
+        ("EU ETS",             conv_eu_ets,      fut_eu_ets,      eu_ets_savings,   eu_ets_savings_perc),
+        ("FuelEU",             conv_fuel_eu,     fut_fuel_eu,     fueleu_savings,   fueleu_savings_perc),
+    ]:
+        rows.append({
+            "metric":       metric,
+            "conv":         conv or 0,
+            "fut":          fut or 0,
+            "savings":      sav or 0,
+            "savings_perc": sav_perc or 0
+        })
 
-    total_conv = sum(r["conv"] for r in rows)
-    total_fut = sum(r["fut"] for r in rows)
-    total_savings = sum(r["savings"] for r in rows)
-    total_savings_perc = (total_savings / total_conv * 100) if total_conv != 0 else 0
+    # coerce None→0 again and sum
+    total_conv        = sum(r["conv"]         for r in rows)
+    total_fut         = sum(r["fut"]          for r in rows)
+    total_savings     = sum(r["savings"]      for r in rows)
+    total_savings_perc = (total_savings / total_conv * 100) if total_conv else 0
 
     rows.append({
-        "metric": "OPEX Total",
-        "conv": total_conv,
-        "fut": total_fut,
-        "savings": total_savings,
+        "metric":       "OPEX Total",
+        "conv":         total_conv,
+        "fut":          total_fut,
+        "savings":      total_savings,
         "savings_perc": total_savings_perc
     })
 
-    # 4) Build table rows
+    # 4) Build HTML table
     table_rows = []
     for row in rows:
-        formatted_conv = format_number(row["conv"])
-        formatted_fut = format_number(row["fut"])
-        formatted_savings = format_number(row["savings"])
-        # Format percentage with a "-" sign if savings > 0 (indicating a reduction)
-        savings_perc_val = float(row["savings_perc"])
-        if savings_perc_val > 0:
-            formatted_perc = f"-{abs(savings_perc_val):.0f}%"
-        elif savings_perc_val < 0:
-            formatted_perc = f"+{abs(savings_perc_val):.0f}%"
+        formatted_conv     = format_number(row["conv"])
+        formatted_fut      = format_number(row["fut"])
+        formatted_savings  = format_number(row["savings"])
+        sp_class           = style_savings(row["savings"])
+        perc = row["savings_perc"]
+        if perc > 0:
+            formatted_perc = f"-{abs(perc):.0f}%"
+        elif perc < 0:
+            formatted_perc = f"+{abs(perc):.0f}%"
         else:
             formatted_perc = "0%"
         table_rows.append(html.Tr([
@@ -918,21 +893,23 @@ def get_opex_comparison_table(api_data, currency):
             html.Td(get_currency_symbol(currency)),
             html.Td(formatted_conv),
             html.Td(formatted_fut),
-            html.Td(formatted_savings, className=style_savings(row["savings"])),
-            html.Td(formatted_perc, className=style_savings(row["savings_perc"]))
+            html.Td(formatted_savings, className=sp_class),
+            html.Td(formatted_perc, className=sp_class)
         ]))
 
     header = html.Thead(html.Tr([
-        html.Th("OPEX"),
-        html.Th("per day"),
+        html.Th("OPEX"), html.Th("per day"),
         html.Th(f"Conventional ({get_currency_symbol(currency)}/day)"),
         html.Th(f"After measures ({get_currency_symbol(currency)}/day)"),
         html.Th(f"Savings ({get_currency_symbol(currency)}/day)"),
         html.Th("Savings (%)")
     ]), style={"backgroundColor": "#0A4B8C", "color": "white"})
 
-    table = dbc.Table([header, html.Tbody(table_rows)], bordered=True, striped=True, hover=True)
+    table = dbc.Table([header, html.Tbody(table_rows)],
+                      bordered=True, striped=True, hover=True)
+
     return html.Div(table, className="table-responsive")
+
 
 def get_opex_comparison_table_year(api_data, currency):
     # --- Data extraction ---
@@ -1438,6 +1415,74 @@ def get_vessel_summary_table(api_data, currency):
     # --- Return the table in a responsive container ---
     return html.Div(table, className="table-responsive")
 
+import os
+import pandas as pd
+import dash_table
+
+def get_country_visits_table(api_data, vessel_name="", vessel_imo="", currency="EUR"):
+    """
+    Build the “Country Visits” table for a given vessel.
+    1) Try api_data["current_table"]["country_vist"] (may be None → treated as empty)
+    2) If empty, load fallback CSV at ../country_visits.csv
+    Columns: Name, Country, Propulsion Electric, Parked Electric, Cold Ironing Electric,
+             Distance NM, Propulsion Days, Parked Days, Cold Ironing Days
+    """
+    # 1) Pull from API (or empty list if None)
+    visits = api_data.get("current_table", {}).get("country_vist") or []
+
+    # 2) If no API visits, attempt CSV fallback
+    if not visits:
+        csv_path = os.path.join(os.path.dirname(__file__), "..", "data/country_visits.csv")
+        try:
+            df = pd.read_csv(csv_path)
+        except Exception:
+            return html.Div("No country-visits data available", className="text-center text-muted")
+        return dash_table.DataTable(
+            columns=[{"name": col, "id": col} for col in df.columns],
+            data=df.to_dict("records"),
+            page_size=10,
+            style_table={'overflowX':'auto'},
+            style_cell={'textAlign':'right','padding':'5px'},
+            style_header={'backgroundColor':'#f0f0f0','fontWeight':'bold','textAlign':'center'}
+        )
+
+    # 3) Build rows from API list of dicts
+    rows = []
+    for i, r in enumerate(visits, start=1):
+        rows.append({
+            "Name":                 i,
+            "Country":              r.get("country",""),
+            "Propulsion Electric":  r.get("sailing_elec_price_mwh_year", 0),
+            "Parked Electric":      r.get("idle_elec_price_mwh_year", 0),
+            "Cold Ironing Electric":r.get("working_elec_price_mwh_year", 0),
+            "Distance NM":          r.get("port_to_next_nm", 0),
+            "Propulsion Days":      r.get("sailing_days", 0),
+            "Parked Days":          r.get("idle_days", 0),
+            "Cold Ironing Days":    r.get("working_days", 0),
+        })
+
+    # 4) Define columns
+    columns = [
+        {"name":"Name",                    "id":"Name",                    "type":"numeric"},
+        {"name":"Country",                 "id":"Country",                 "type":"text"},
+        {"name":"Propulsion Electric ($)", "id":"Propulsion Electric",     "type":"numeric"},
+        {"name":"Parked Electric ($)",     "id":"Parked Electric",         "type":"numeric"},
+        {"name":"Cold Ironing Electric ($)","id":"Cold Ironing Electric",  "type":"numeric"},
+        {"name":"Distance NM",             "id":"Distance NM",             "type":"numeric"},
+        {"name":"Propulsion Days",         "id":"Propulsion Days",         "type":"numeric"},
+        {"name":"Parked Days",             "id":"Parked Days",             "type":"numeric"},
+        {"name":"Cold Ironing Days",       "id":"Cold Ironing Days",       "type":"numeric"},
+    ]
+
+    return dash_table.DataTable(
+        columns=columns,
+        data=rows,
+        page_size=10,
+        style_table={'overflowX':'auto'},
+        style_cell={'textAlign':'right','padding':'5px'},
+        style_header={'backgroundColor':'#f0f0f0','fontWeight':'bold','textAlign':'center'}
+    )
+
 def set_figure_layout(fig, title, xaxis_title=None, yaxis_title=None):
     """Centralized layout configuration with fixed sizing to avoid compression."""
     fig.update_layout(
@@ -1880,12 +1925,13 @@ def layout():
                 dcc.Checklist(
                     id='table-selection-dropdown',
                     options=[
-                        {"label": "Vessel Summary", "value": "vessel_summary"},
-                        {"label": "Current Output", "value": "current"},
-                        {"label": "Future Output", "value": "future"},
-                        {"label": "OPEX Comparison", "value": "opex"},
+                        {"label": "Vessel Summary",       "value": "vessel_summary"},
+                        {"label": "Current Output",       "value": "current"},
+                        {"label": "Future Output",        "value": "future"},
+                        {"label": "OPEX Comparison",      "value": "opex"},
                         {"label": "Emissions Comparison", "value": "emissions"},
-                        {"label": "Carbon Footprint", "value": "carbon_footprint"}
+                        {"label": "Carbon Footprint",     "value": "carbon_footprint"},
+                        {"label": "Country Visits",       "value": "country_visits"},
                     ],
                     value=['opex', 'emissions'],
                     labelStyle={"display": "inline-block", "marginRight": "10px"},
@@ -1896,14 +1942,15 @@ def layout():
                 dcc.RadioItems(
                     id="timeframe-toggle",
                     options=[
-                        {"label": "Daily", "value": "day"},
-                        {"label": "Yearly", "value": "year"}
+                        {"label": "Daily",   "value": "day"},
+                        {"label": "Yearly",  "value": "year"}
                     ],
                     value="day",
                     labelStyle={"display": "inline-block", "marginRight": "10px"}
                 )
-            ], md=12, xs=12)
+            ], md=12)
         ], className="mb-4"),
+        # this is where our callback will inject the tables
         html.Div(id='output-content', 
                  style={"padding": "20px", "backgroundColor": "#f8f9fa", "borderRadius": "8px"})
-    ], fluid=True, className="py-4")  # Use dbc.Container here, not html.Div
+    ], fluid=True, className="py-4")

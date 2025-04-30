@@ -34,6 +34,7 @@ from pages.output_module import (
     get_carbon_footprint_table,
     get_vessel_summary_table,
     dashboard_layout,
+    get_country_visits_table,
     cashflow_figure,
     min_future_opex_figure,
     maintenance_cost_figure,
@@ -101,7 +102,7 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
     future_data = future_data or {}
     
     params = {
-        "vessel_id": vessel_data.get("imo", 11111),
+        "vessel_id": vessel_data.get("vessel_id", 11111),
         "main_engine_power_kw": float(vessel_data.get("total_engine_power", 10400)),
         "aux_engine_power_kw": float(vessel_data.get("average_hoteling_kw", 2246)),
         "sailing_engine_load": float(vessel_data.get("sailing_engine_load", 50))/100,
@@ -150,7 +151,7 @@ def fetch_dashboard_scenarios(vessel_data, future_data):
 # -------------------------------------------------------------------------------
 def get_financial_data(input_params=None, vessel_data_override=None):
     fallback_defaults = {
-        "vessel_id": 9803613,
+        "vessel_id": 48217,
         "main_engine_power_kw": 10400,
         "aux_engine_power_kw": 2246,
         "sailing_engine_load": 0.5,
@@ -185,7 +186,7 @@ def get_financial_data(input_params=None, vessel_data_override=None):
     }
     vessel_data = merge_vessel_data(vessel_data_override)
     vessel_overrides = {
-        "vessel_id": vessel_data.get("imo", fallback_defaults["vessel_id"]),
+        "vessel_id": vessel_data.get("vessel_id", fallback_defaults["vessel_id"]),
         "main_engine_power_kw": vessel_data.get("total_engine_power", fallback_defaults["main_engine_power_kw"]),
         "aux_engine_power_kw": vessel_data.get("average_hoteling_kw", fallback_defaults["aux_engine_power_kw"]),
         "main_fuel_type": vessel_data.get("main_fuel_type", fallback_defaults["main_fuel_type"]),
@@ -648,7 +649,7 @@ def register_callbacks(app):
             blend_value /= 100.0
         
         params = {
-            "vessel_id": vessel_data.get("imo", 9803613),
+            "vessel_id": vessel_data.get("vessel_id", 48217),
             "main_engine_power_kw": float(main_power),
             "aux_engine_power_kw": float(aux_power),
             "main_fuel_type": main_fuel_type,
@@ -1224,118 +1225,93 @@ def register_callbacks(app):
             return []
         return [{'label': scen, 'value': scen} for scen in scenarios_data.keys()]
 
+
     @app.callback(
         Output("output-content", "children"),
         [
-            Input("api-data-store", "data"),
-            Input("future-data-store", "data"),
+            Input("api-data-store",           "data"),
+            Input("future-data-store",        "data"),
             Input("table-selection-dropdown", "value"),
-            Input("timeframe-toggle", "value")
+            Input("timeframe-toggle",         "value")
         ]
     )
     def display_emissions_output(api_data, future_data, selected_tables, timeframe):
+        # guard against missing
+        api_data    = api_data    or {}
+        future_data = future_data or {}
+
         if not api_data:
             return html.Div(
-                dbc.Alert("No data available. Please calculate emissions and costs first.", color="warning"),
+                dbc.Alert("No data available. Please calculate first.", color="warning"),
                 className="mt-4"
             )
         if not selected_tables:
             return html.Div(
-                dbc.Alert("Please select at least one table to display.", color="info"),
+                dbc.Alert("Please select at least one table.", color="info"),
                 className="mt-4"
             )
-        
-        currency = (future_data or {}).get("currency-choice", "EUR")
-        conv_factor = config.CURRENCIES.get(currency, {}).get("conversion", 1.0)
+
+        currency = future_data.get("currency-choice", "EUR")
         sections = []
-        
-        
-        
+
         if 'vessel_summary' in selected_tables:
             sections.append(
-                dbc.Card(
-                    [
-                        dbc.CardHeader(html.H4("Vessel Summary")),
-                        dbc.CardBody(get_vessel_summary_table(api_data, currency))
-                    ],
-                    className="mb-4"    
-          
-                )
+                dbc.Card([dbc.CardHeader("Vessel Summary"),
+                        dbc.CardBody(get_vessel_summary_table(api_data, currency))],
+                        className="mb-4")
             )
+
         if 'current' in selected_tables:
             sections.append(
-                dbc.Card(
-                    [
-                        dbc.CardHeader(html.H4("Current Output Table")),
-                        dbc.CardBody(get_current_output_table(api_data, currency))
-                    ],
-                    className="mb-4"
-                )
+                dbc.Card([dbc.CardHeader("Current Output Table"),
+                        dbc.CardBody(get_current_output_table(api_data, currency))],
+                        className="mb-4")
             )
-        
+
         if 'future' in selected_tables:
             sections.append(
-                dbc.Card(
-                    [
-                        dbc.CardHeader(html.H4("Future Output Table")),
-                        dbc.CardBody(get_future_output_table(api_data, currency))
-                    ],
-                    className="mb-4"
-                )
+                dbc.Card([dbc.CardHeader("Future Output Table"),
+                        dbc.CardBody(get_future_output_table(api_data, currency))],
+                        className="mb-4")
             )
-        
+
         if 'opex' in selected_tables:
-            if timeframe == "day":
-                opex_table = get_opex_comparison_table(api_data, currency)
-            else:
-                opex_table = get_opex_comparison_table_year(api_data, currency)
+            tbl = (get_opex_comparison_table(api_data, currency)
+                if timeframe=="day"
+                else get_opex_comparison_table_year(api_data, currency))
             sections.append(
-                dbc.Card(
-                    [
-                        dbc.CardHeader(html.H4("OPEX Comparison")),
-                        dbc.CardBody(opex_table)
-                    ],
-                    className="mb-4"
-                )
+                dbc.Card([dbc.CardHeader("OPEX Comparison"), dbc.CardBody(tbl)],
+                        className="mb-4")
             )
-        
+
         if 'emissions' in selected_tables:
-            if timeframe == "day":
-                emissions_table = get_emissions_comparison_table(api_data)
-            else:
-                emissions_table = get_emissions_comparison_table_year(api_data)
+            tbl = (get_emissions_comparison_table(api_data)
+                if timeframe=="day"
+                else get_emissions_comparison_table_year(api_data))
             sections.append(
-                dbc.Card(
-                    [
-                        dbc.CardHeader(html.H4("Emissions Comparison")),
-                        dbc.CardBody(emissions_table)
-                    ],
-                    className="mb-4"
-                )
+                dbc.Card([dbc.CardHeader("Emissions Comparison"), dbc.CardBody(tbl)],
+                        className="mb-4")
             )
 
         if 'carbon_footprint' in selected_tables:
             sections.append(
-                dbc.Card(
-                    [
-                        dbc.CardHeader(html.H4("Carbon Footprint Scope 1, 2, and 3")),
-                        dbc.CardBody(get_carbon_footprint_table(api_data))
-                    ],
-                    className="mb-4"
-                )
-            )       
-        
-        
-        dash_layout_content = dashboard_layout(api_data, currency)
-        sections.append(
-            dbc.Card(
-                [
-                    dbc.CardHeader(html.H4("Dashboard")),
-                    dbc.CardBody(dash_layout_content)
-                ],
-                className="mb-4"
+                dbc.Card([dbc.CardHeader("Carbon Footprint Scope 1–3"),
+                        dbc.CardBody(get_carbon_footprint_table(api_data))],
+                        className="mb-4")
             )
+
+        if 'country_visits' in selected_tables:
+            sections.append(
+                dbc.Card([dbc.CardHeader("Country Visits"),
+                        dbc.CardBody(get_country_visits_table(api_data, currency))],
+                        className="mb-4")
+            )
+
+        # finally embed your executive dashboard
+        sections.append(
+            dbc.Card([dbc.CardHeader("Dashboard"), dbc.CardBody(dashboard_layout(api_data, currency))],
+                    className="mb-4")
         )
-        
+
         return html.Div(sections)
     return app
