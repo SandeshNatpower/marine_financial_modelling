@@ -731,7 +731,89 @@ def multi_chart_dashboard_layout():
     ], className="mb-4")
 
 
+import dash_bootstrap_components as dbc
+from dash import html, dcc, dash_table, Input, Output, callback
+import plotly.graph_objects as go
+import pandas as pd
 
+# Projection Summary Layout
+
+def projection_summary_layout():
+    return dbc.Card([
+        dbc.CardHeader([
+            html.H4("Projection Summary", className="text-center"),
+            html.Small("Compare scenarios across multiple years", className="text-muted text-center d-block")
+        ]),
+        dbc.CardBody([
+            # Controls Row
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Fuel Scenarios", className="fw-bold"),
+                    dcc.Dropdown(
+                        id="summary-scenario-dropdown",
+                        options=[], value=[], multi=True,
+                        placeholder="Select one or more scenarios…",
+                        className="mb-2"
+                    ),
+                    html.Small("Select multiple scenarios to compare", className="text-muted")
+                ], md=6),
+                dbc.Col([
+                    html.Label("Year Range", className="fw-bold"),
+                    dcc.RangeSlider(
+                        id="summary-year-range",
+                        min=2025, max=2050, step=1,
+                        value=[2025, 2029],
+                        marks={yr: str(yr) for yr in range(2025, 2051, 5)},
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.Small("Adjust year range for analysis", className="text-muted")
+                ], md=6),
+            ], className="mb-4"),
+            
+            # Charts & Analysis Tabs
+            dbc.Tabs([
+                dbc.Tab([
+                    dbc.Row([
+                        dbc.Col(dbc.Card([
+                            dbc.CardHeader("OPEX Summary"),
+                            dbc.CardBody(dcc.Graph(id="chart-opex-stack"))
+                        ]), md=6),
+                        dbc.Col(dbc.Card([
+                            dbc.CardHeader("Other Costs Breakdown"),
+                            dbc.CardBody(dcc.Graph(id="chart-other-stack"))
+                        ]), md=6),
+                    ], className="mb-4"),
+                ], label="Charts"),
+                
+                dbc.Tab(dbc.Card([
+                    dbc.CardHeader("Scenario Ranking"),
+                    dbc.CardBody(dash_table.DataTable(
+                        id="summary-ranking-table",
+                        style_table={'overflowX': 'auto'},
+                        style_cell={'padding': '10px', 'textAlign': 'left'},
+                        style_header={'backgroundColor': '#e9ecef', 'fontWeight': 'bold', 'textAlign': 'center'},
+                        sort_action="native",
+                        filter_action="native",
+                        export_format="csv"
+                    ))
+                ]), label="Ranking"),
+                
+                dbc.Tab(dbc.Card([
+                    dbc.CardHeader("Cost Analysis"),
+                    dbc.CardBody(html.Div(id="summary-cost-analysis"))
+                ]), label="Analysis")
+            ], className="mb-4"),
+            
+            # Export Button
+            dbc.Row(
+                dbc.Col(html.Button(
+                    [html.I(className="fas fa-download me-2"), "Export as PDF"],
+                    id="summary-export-btn",
+                    className="btn btn-outline-primary float-end"
+                ), width=12)
+            )
+        ])
+    ], className="mb-4 shadow")
 
 # ----------------------------
 # Main App Layout
@@ -739,18 +821,18 @@ def multi_chart_dashboard_layout():
 def layout():
     """
     Top-level layout that includes a global scenario filter and two tabs:
-    Financial Metrics and Combined Dashboard.
+    Financial Metrics, Financial Dashboard, and Projection Summary.
     """
     return dbc.Container(
         [
-            # Global Scenario Filter Row
+            # Global Scenario Filter
             dbc.Row([
                 dbc.Col(
                     dcc.Dropdown(
                         id="scenario-filter-global",
                         options=config.FUEL_OPTIONS,
                         multi=True,
-                        value=["MDO", "LNG"],  # Preselect example fuels
+                        value=["MDO", "LNG"],
                         placeholder="Select additional scenarios...",
                         className="mb-2"
                     ),
@@ -758,7 +840,7 @@ def layout():
                 ),
                 dbc.Col(
                     dbc.Button(
-                        "Calculate Scenarios", 
+                        "Calculate Scenarios",
                         id="calculate-scenarios-btn",
                         color="primary",
                         className="w-100"
@@ -767,19 +849,21 @@ def layout():
                 )
             ], className="mb-4"),
 
-            # Tabs: Financial Metrics and Combined Dashboard
+            # Tabs
             dbc.Tabs(
                 [
                     dbc.Tab(financial_metrics_layout(), label="Financial Metrics"),
-                    dbc.Tab(multi_chart_dashboard_layout(), label="Financial Dashboard")
+                    dbc.Tab(multi_chart_dashboard_layout(), label="Financial Dashboard"),
+                    dbc.Tab(projection_summary_layout(), label="Projection Summary"),
                 ]
             ),
-            
-            # Store component for scenario data
+
+            # Store
             dcc.Store(id="dashboard-scenarios-store")
         ],
         fluid=True
     )
+
 
 
 

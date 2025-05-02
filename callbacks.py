@@ -15,8 +15,8 @@ from email.message import EmailMessage
 from dash import Input, Output, State, callback_context, no_update
 from dash.dcc import send_bytes
 
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+#from reportlab.lib.pagesizes import A4
+#from reportlab.pdfgen import canvas
 import dash
 from dash import html, dcc, Input, Output, State, no_update, callback_context
 from dash.exceptions import PreventUpdate
@@ -493,7 +493,7 @@ def register_callbacks(app):
         # Build the parameters for the API call.
         # Notice that we pass the user-selected scenarios as a list.
         params = {
-            "vessel_id": vessel_data.get("imo", 11111),
+            "vessel_id": vessel_data.get("vessel_id", 48217),
             "main_engine_power_kw": float(main_power),
             "aux_engine_power_kw": float(aux_power),
             "sailing_engine_load": float(sailing_engine_load) / 100,
@@ -1104,6 +1104,377 @@ def register_callbacks(app):
 
 
 
+
+
+    @app.callback(
+        [Output("summary-scenario-dropdown", "options"),
+         Output("summary-scenario-dropdown", "value")],
+        Input("dashboard-scenarios-store", "data")
+    )
+    def update_summary_scenarios(dashboard_data):
+        if not dashboard_data:
+            return [], []
+        scenarios = list(dashboard_data.keys())
+        return ([{"label": s, "value": s} for s in scenarios], scenarios[:2])
+
+    @app.callback(
+        [
+            Output("chart-opex-stack", "figure"),
+            Output("chart-other-stack", "figure"),
+            Output("summary-ranking-table", "data"),
+            Output("summary-ranking-table", "columns"),
+            Output("summary-ranking-table", "style_data_conditional"),
+            Output("summary-cost-analysis", "children")
+        ],
+        [
+            Input("dashboard-scenarios-store", "data"),
+            Input("summary-scenario-dropdown", "value"),
+            Input("summary-year-range", "value")
+        ]
+    )
+    def update_summary(dashboard_data, fuels, year_range):
+        if not dashboard_data or not fuels:
+            empty = go.Figure().update_layout(
+                title="No data available",
+                annotations=[{
+                    "text": "Please select scenarios to compare",
+                    "xref": "paper", "yref": "paper",
+                    "x": 0.5, "y": 0.5,
+                    "showarrow": False,
+                    "font": {"size": 16}
+                }]
+            )
+            return [empty, empty] + [[]] * 3 + [html.Div("No data to analyze")]
+
+        start, end = year_range
+        totals = calculate_scenario_totals(dashboard_data, fuels, start, end)
+        fig1 = create_opex_chart(fuels, totals, start, end)
+        fig2 = create_other_costs_chart(fuels, totals, start, end)
+        rows, cols, style = create_ranking_table(fuels, totals)
+        analysis = create_cost_analysis(fuels, totals)
+        return fig1, fig2, rows, cols, style, analysis
+
+
+    def calculate_scenario_totals(data, fuels, start, end):
+        """
+        Calculate scenario totals using pandas for concise aggregation.
+        """
+        # Flatten data into DataFrame
+        records = []
+        for scenario, recs in data.items():
+            for r in recs:
+                records.append({**r, 'scenario': scenario})
+        df = pd.DataFrame(records)
+        # Filter
+        df = df[df['scenario'].isin(fuels) & df['year'].between(start, end)]
+        # Sum aggregates
+        agg = df.groupby('scenario').agg({
+            'opex': 'sum',
+            'fuel_price': 'sum',
+            'maintenance': 'sum',
+            'spare': 'sum',
+            'eu_ets': 'sum',
+            'penalty': 'sum'
+        }).reset_index()
+        # Last compliance per scenario
+        last_comp = df.sort_values('year').groupby('scenario').last()[['compliance_balance']].reset_index()
+        # Merge
+        result = pd.merge(agg, last_comp, on='scenario')
+        # Convert to dict
+        totals = {}
+        for _, row in result.iterrows():
+            totals[row['scenario']] = {
+                'opex': row['opex'],
+                'fuel_price': row['fuel_price'],
+                'maintenance': row['maintenance'],
+                'spare': row['spare'],
+                'eu_ets': row['eu_ets'],
+                'penalty': row['penalty'],
+                'comp': row['compliance_balance']
+            }
+        return totals
+
+
+    def create_opex_chart(fuels, totals, start, end):
+        """
+        OPEX Summary bar chart, sorted by total OPEX (ascending),
+        with scenario name as a tiebreaker for identical values.
+        """
+        # Primary key = opex, secondary key = scenario name
+        sorted_fuels = sorted(
+            fuels,
+            key=lambda f: (totals[f]['opex'], f)
+        )
+        fig = go.Figure([go.Bar(
+            x=sorted_fuels,
+            y=[totals[f]['opex'] for f in sorted_fuels],
+            name="OPEX Σ"
+        )])
+        fig.update_layout(
+            title=f"OPEX Summary ({start}–{end})",
+            xaxis_title="Scenario",
+            yaxis_title="€",
+            template="plotly_white",
+            yaxis_tickformat=",.0f",
+            height=400,
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+        return fig
+
+    def create_other_costs_chart(fuels, totals, start, end, excluded_components=None):
+        """
+        Stacked chart for "other" costs, sorted by total cost (ascending),
+        with scenario name as a tiebreaker. Components stacked from largest to smallest.
+        
+        Parameters:
+        - fuels: list of scenario names
+        - totals: dictionary of cost data
+        - start, end: years for the title
+        - excluded_components: list of component keys to exclude (e.g., ['fuel_price'])
+        """
+        # Define all possible components and their labels
+        all_components = ['fuel_price', 'maintenance', 'spare', 'eu_ets', 'penalty']
+        all_labels = ['Fuel', 'Maintenance', 'Spare', 'EU ETS', 'Penalty']
+        
+        # Create a mapping from component to label
+        component_to_label = dict(zip(all_components, all_labels))
+        
+        # Filter out excluded components if specified
+        if excluded_components:
+            active_components = [comp for comp in all_components if comp not in excluded_components]
+        else:
+            active_components = all_components.copy()
+        
+        # If no active components remain, return an empty figure
+        if not active_components:
+            fig = go.Figure()
+            fig.update_layout(
+                title=f"No components selected for display ({start}–{end})",
+                template="plotly_white",
+                height=400
+            )
+            return fig
+        
+        # Compute combined cost per scenario using only active components
+        other_totals = {
+            f: sum(totals[f][comp] for comp in active_components if comp in totals[f])
+            for f in fuels
+        }
+        
+        # Sort scenarios by (other_total, scenario_name)
+        sorted_fuels = sorted(
+            fuels,
+            key=lambda f: (other_totals[f], f)
+        )
+        
+        # Calculate the total for each component across all scenarios
+        component_totals = {}
+        for comp in active_components:
+            component_totals[comp] = sum(totals[f].get(comp, 0) for f in fuels)
+        
+        # Sort components by their total size (largest first)
+        sorted_components = sorted(
+            active_components,
+            key=lambda comp: component_totals[comp],
+            reverse=True  # Largest first
+        )
+        
+        fig = go.Figure()
+        # Add traces in order from largest to smallest component
+        for comp in sorted_components:
+            label = component_to_label[comp]
+            fig.add_trace(go.Bar(
+                x=sorted_fuels,
+                y=[totals[f].get(comp, 0) for f in sorted_fuels],
+                name=label
+            ))
+        
+        # Create a title that reflects any exclusions
+        title = f"Other Costs Breakdown ({start}–{end})"
+        if excluded_components:
+            excluded_labels = [component_to_label[comp] for comp in excluded_components if comp in component_to_label]
+            if excluded_labels:
+                title += f" (excluding {', '.join(excluded_labels)})"
+        
+        fig.update_layout(
+            barmode='stack',
+            title=title,
+            xaxis_title="Scenario",
+            yaxis_title="€",
+            template="plotly_white",
+            yaxis_tickformat=",.0f",
+            height=400,
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+        return fig
+
+
+
+    def create_other_costs_chart(
+        fuels, totals, start, end,
+        included_components=None,
+        sort_by_total=True
+    ):
+        """
+        Stacked chart for costs, with optional total‑based sorting.
+        - sort_by_total=True: order by sum of included components (ascending)
+        - sort_by_total=False: respect the original 'fuels' order
+        """
+        all_components = ['fuel_price','maintenance','spare','eu_ets','penalty']
+        all_labels     = ['Fuel','Maintenance','Spare','EU ETS','Penalty']
+        colors = {
+            'Fuel':'#D9D2E9','Maintenance':'#F9CB9C',
+            'Spare':'#00CC96','EU ETS':'#6FA8DC','Penalty':'#FF9966'
+        }
+        comp_to_label = dict(zip(all_components, all_labels))
+
+        # pick which components to show
+        active = included_components or all_components
+        active = [c for c in all_components if c in active]
+        if not active:
+            fig = go.Figure().update_layout(
+                title=f"No components selected ({start}–{end})",
+                template="plotly_white", height=400
+            )
+            return fig
+
+        # 1) compute per‑scenario total of just the active components
+        scenario_totals = {
+            f: sum(totals[f].get(c,0) for c in active)
+            for f in fuels
+        }
+
+        # 2) decide final x‑axis order
+        if sort_by_total:
+            # stable sort: ties keep dropdown order
+            sorted_fuels = sorted(fuels, key=lambda f: scenario_totals[f])
+        else:
+            sorted_fuels = list(fuels)
+
+        # 3) decide vertical stacking order (smallest on bottom → largest on top)
+        comp_totals = {c: sum(totals[f].get(c,0) for f in fuels) for c in active}
+        sorted_comps = sorted(active, key=lambda c: comp_totals[c])
+
+        # build the figure
+        fig = go.Figure()
+        for comp in sorted_comps:
+            lbl = comp_to_label[comp]
+            fig.add_trace(go.Bar(
+                x=sorted_fuels,
+                y=[totals[f].get(comp,0) for f in sorted_fuels],
+                name=lbl,
+                marker_color=colors[lbl]
+            ))
+
+        fig.update_layout(
+            barmode='stack',
+            title=f"Other Costs Breakdown ({start}–{end})",
+            xaxis_title="Scenario", yaxis_title="€",
+            template="plotly_white", yaxis_tickformat=",.0f",
+            height=400, margin=dict(l=50,r=50,t=50,b=50)
+        )
+        return fig
+
+
+    def create_ranking_table(fuels, totals):
+        """
+        Create the scenario ranking table data, sorted by lowest OPEX (which already
+        includes all cost components). Compliance is displayed but NOT included in
+        the ranking key.
+        """
+        rows = []
+        for f in fuels:
+            opex = totals[f]['opex']
+            fuel_price = totals[f]['fuel_price']
+            maintenance = totals[f]['maintenance']
+            spare = totals[f]['spare']
+            eu_ets = totals[f]['eu_ets']
+            penalty = totals[f]['penalty']
+
+            
+            rows.append({
+                'Scenario': f,
+                '_opex': opex,
+                '_fuel_price': fuel_price,
+                '_maintenance': maintenance,
+                '_spare': spare,
+                '_eu_ets': eu_ets,
+                '_penalty': penalty,
+                
+                'OPEX Σ': f"€{opex:,.0f}",
+                'Fuel Σ': f"€{fuel_price:,.0f}",
+                'Maintenance Σ': f"€{maintenance:,.0f}",
+                'Spare Σ': f"€{spare:,.0f}",
+                'EU ETS Σ': f"€{eu_ets:,.0f}",
+                'Penalty Σ': f"€{penalty:,.0f}",
+                
+            })
+
+        # Sort by OPEX only
+        rows.sort(key=lambda r: r['_opex'])
+
+        # Highlight best/worst in each visible column
+        style = []
+        for display, raw, invert in [
+            ('OPEX Σ', '_opex', False),         # lower is better
+            ('Fuel Σ', '_fuel_price', False),   # lower is better
+            ('Maintenance Σ', '_maintenance', False), # lower is better
+            ('Spare Σ', '_spare', False),       # lower is better
+            ('EU ETS Σ', '_eu_ets', False),     # lower is better
+            ('Penalty Σ', '_penalty', False)    # lower is better
+        ]:
+            vals = [r[raw] for r in rows]
+            best = min(vals) if not invert else max(vals)
+            worst = max(vals) if not invert else min(vals)
+            style += [
+                {
+                'if': {
+                    'filter_query': f"{{{raw}}} = {best}",
+                    'column_id': display
+                },
+                'backgroundColor': '#d4edda',
+                'fontWeight': 'bold'
+                },
+                {
+                'if': {
+                    'filter_query': f"{{{raw}}} = {worst}",
+                    'column_id': display
+                },
+                'backgroundColor': '#f8d7da',
+                'fontWeight': 'bold'
+                }
+            ]
+
+        # Clean out raw helper keys before returning to DataTable
+        for r in rows:
+            for raw_key in ['_fuel_price', '_maintenance', '_spare', '_eu_ets', '_penalty']:
+                r.pop(raw_key)
+
+
+        # Only two columns now
+        columns = [
+            {'name': 'Scenario',       'id': 'Scenario'},
+            {'name': 'OPEX Σ',         'id': 'OPEX Σ'},
+            {'name': 'Fuel Price Σ',         'id': 'Fuel Σ'},
+            {'name': 'EU ETS Penalty Σ',       'id': 'EU ETS Σ'},
+            {'name': 'Fuel EU Penalty Σ',      'id': 'Penalty Σ'},
+            {'name': 'Maintenance Cost Σ',   'id': 'Maintenance Σ'},
+            {'name': 'Spare Cost Σ',        'id': 'Spare Σ'},
+
+        ]
+
+        return rows, columns, style
+
+
+
+    def create_cost_analysis(fuels, totals):
+        total_costs = {f: sum(totals[f][k] for k in ['opex', 'fuel_price', 'maintenance', 'spare', 'eu_ets', 'penalty']) for f in fuels}
+        best = min(total_costs, key=total_costs.get)
+        worst = max(total_costs, key=total_costs.get)
+        return html.Div([
+            html.H5("Cost Analysis Summary"),
+            html.P(f"Based on the selected range, {best} has the lowest cost (€{total_costs[best]:,.0f}) and {worst} the highest (€{total_costs[worst]:,.0f}).")
+        ])
 
 
     # ─── 1) Capture report configuration ──────────────────────────────────────────
