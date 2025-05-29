@@ -66,7 +66,7 @@ def get_sidebar():
         pills=True
     )
     logo_section = html.Div([
-        html.Img(src="/assets/Natpower_Marine.png", style={"width": "200px", "marginBottom": "1rem"})
+        html.Img(src="/assets/sea-energy-logo.svg", style={"width": "200px", "marginBottom": "1rem"})
     ])
     help_button = html.Div(
         html.Button("Need Help?", id="help-button", className="btn btn-outline-light btn-sm w-100",
@@ -129,6 +129,7 @@ app.layout = html.Div([
     # Replace the debug store with a Pre element for displaying debug text
     html.Pre(id="debug-dashboard-data", style={"backgroundColor": "#f8f9fa", "padding": "10px", "maxHeight": "200px", "overflowY": "scroll"}),
     html.Link(rel="stylesheet", href="https://use.fontawesome.com/releases/v5.15.4/css/all.css"),
+    html.Link(rel="icon", href ="/assets/sea-energy-logo.svg", type = "image/svg+xml"),
     get_sidebar(),
     get_content(),
     dbc.Modal(
@@ -224,4 +225,4 @@ register_callbacks(app)
 # RUN SERVER
 ###############################################################################
 if __name__ == "__main__":
-    app.run_server(debug=True, host="0.0.0.0", port=8050, use_reloader=False)
+    app.run(debug=True, host="0.0.0.0", port=8050, use_reloader=False)
