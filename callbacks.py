@@ -345,6 +345,62 @@ def register_callbacks(app):
             vessel_data.get("aux_fuel_type", "MDO")
         )
 
+    # --- Persist user edits back into the store ---
+    @app.callback(
+        Output('vessel-data-store', 'data', allow_duplicate=True),
+        [
+            # Vessel info fields
+            Input('vessel-name', 'value'),
+            Input('imo-number', 'value'),
+            Input('vessel-category', 'value'),
+            Input('gross-tonnage', 'value'),
+            Input('year-built', 'value'),
+            Input('dwt', 'value'),
+            # Technical specs fields
+            Input('main-power', 'value'),
+            Input('aux-power', 'value'),
+            Input('main-engine-type', 'value'),
+            Input('aux-engine-type', 'value'),
+            Input('main-fuel-type', 'value'),
+            Input('aux-fuel-type', 'value'),
+        ],
+        State('vessel-data-store', 'data'),
+        prevent_initial_call=True
+    )
+    def persist_vessel_edits(
+        name, imo, category, gt, build, dwt,
+        main_power, aux_power, main_eng_type, aux_eng_type, main_fuel, aux_fuel,
+        current_data
+    ):
+        # Prevent loops: only run when a field changed
+        triggered = callback_context.triggered[0]['prop_id']
+        if 'vessel-data-store.data' in triggered:
+            return dash.no_update
+
+        # Copy existing data
+        data = (current_data or config.DEFAULT_VESSEL).copy()
+
+        # Merge vessel info edits
+        data.update({
+            'vessel_name': name,
+            'imo': imo,
+            'new_vessel_category': category,
+            'gross_tonnage': gt,
+            'build': build,
+            'dwt': dwt,
+        })
+
+        # Merge technical specs edits
+        data.update({
+            'total_engine_power': main_power,
+            'average_hoteling_kw': aux_power,
+            'main_engine_type': main_eng_type,
+            'aux_engine_type': aux_eng_type,
+            'main_fuel_type': main_fuel,
+            'aux_fuel_type': aux_fuel,
+        })
+
+        return data
 
     @app.callback(
         Output('places-summary-table-container', 'children'),
