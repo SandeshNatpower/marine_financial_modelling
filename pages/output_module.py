@@ -62,7 +62,7 @@ def style_savings(value):
 # =============================================================================
 def get_current_output_table(api_data, currency):
     current = api_data.get("current_table", {})
-
+    print(f"api_data : ", api_data)
     # ----- Header Days (override Idle and Shore as per sample) -----
     working_days_data = (current.get("working_days") or [{}])[0]
     sailing_days = working_days_data.get("sailing_days", 175)      # sample: 175

@@ -117,7 +117,7 @@ def create_input_group(label, id, value=None, input_type='number', options=None,
 # VESSEL DETAILS FETCHER
 # -------------------------------------------------------------------------------
 def get_vessel_details(search_term, search_type='imo'):
-    url = "https://natpower-marine-api-dev.azurewebsites.net/marinedata/getvesseldetails_engine_places?"
+    url = "https://natpower-marine-api-prod.azurewebsites.net/marinedata/getvesseldetails_engine_places?"
     params = {"imo": search_term, "mmsi": search_term} if search_type == 'imo' else {"vesselname": search_term}
     
     try:

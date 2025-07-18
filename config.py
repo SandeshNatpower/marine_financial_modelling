@@ -3,7 +3,7 @@ import os
 import requests
 
 # API Endpoints
-API_BASE = os.getenv("API_BASE", "https://natpower-marine-api-dev.azurewebsites.net/marinedata")
+API_BASE = os.getenv("API_BASE", "https://natpower-marine-api-prod.azurewebsites.net/marinedata")
 VESSEL_ENDPOINT = f"{API_BASE}/getvesseldetails_engine_places"
 FINANCIAL_ENDPOINT = f"{API_BASE}/financialmodelling"
 DASHBOARD_ENDPOINT = f"{API_BASE}/financialmodellingscenarios"
